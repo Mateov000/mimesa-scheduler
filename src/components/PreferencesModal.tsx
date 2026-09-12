@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Sliders, Moon, BookOpen, Users, Dumbbell, Shield, Car, Save, Check, Key, ExternalLink, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Sliders, Moon, BookOpen, Users, Dumbbell, Shield, Car, Save, Check, Key, ExternalLink, Eye, EyeOff, Sparkles, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { UserPreferences } from '@/types/database';
 import { DataStore } from '@/lib/storage';
 
@@ -22,14 +22,71 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
   const [geminiKey, setGeminiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
+  const [isTestingKey, setIsTestingKey] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setGeminiKey(DataStore.getGeminiApiKey());
   }, []);
 
+  const handleSaveKey = (keyToSave?: string) => {
+    const val = typeof keyToSave === 'string' ? keyToSave : geminiKey;
+    DataStore.saveGeminiApiKey(val);
+    setKeySaved(true);
+    setTimeout(() => setKeySaved(false), 2500);
+    if (onApiKeySaved) onApiKeySaved();
+  };
+
+  const handleTestKey = async () => {
+    const keyToTest = geminiKey.trim();
+    if (!keyToTest || keyToTest.length < 10) {
+      setTestResult({
+        success: false,
+        message: 'Por favor ingresa una clave válida de Google AI Studio antes de probar.',
+      });
+      return;
+    }
+
+    setIsTestingKey(true);
+    setTestResult(null);
+
+    try {
+      const res = await fetch('/api/gemini/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: keyToTest }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestResult({
+          success: true,
+          message: `¡Conexión exitosa con ${data.model}! Latencia: ${data.latency_ms} ms.`,
+        });
+        // Auto-guardar la clave probada exitosamente
+        handleSaveKey(keyToTest);
+      } else {
+        setTestResult({
+          success: false,
+          message: data.hint || data.error || 'Error al conectar con Gemini.',
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: `Error de red al conectar: ${err?.message || err}`,
+      });
+    } finally {
+      setIsTestingKey(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Guardar clave de Gemini siempre que se guarde el formulario
+    handleSaveKey();
+
     const updated: UserPreferences = {
       ...preferences,
       weight_sleep: Number(weightSleep),
@@ -249,7 +306,11 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
               <input
                 type={showKey ? 'text' : 'password'}
                 value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
+                onChange={(e) => {
+                  setGeminiKey(e.target.value);
+                  setTestResult(null);
+                }}
+                onBlur={() => handleSaveKey()}
                 placeholder="AIzaSy..."
                 className="w-full rounded-xl bg-slate-950 border border-slate-700 pl-9 pr-10 py-2 text-xs text-white font-mono"
               />
@@ -262,18 +323,30 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
               </button>
             </div>
 
+            {/* Botón Probar Conexión */}
             <button
               type="button"
-              onClick={() => {
-                DataStore.saveGeminiApiKey(geminiKey);
-                setKeySaved(true);
-                setTimeout(() => setKeySaved(false), 2500);
-                if (onApiKeySaved) onApiKeySaved();
-              }}
+              onClick={handleTestKey}
+              disabled={isTestingKey}
+              className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 px-3.5 py-2 text-xs font-bold text-cyan-300 hover:text-white transition-all shrink-0 flex items-center justify-center gap-1.5 disabled:opacity-50"
+              title="Realiza una prueba real de conexión con Gemini 1.5 Flash"
+            >
+              {isTestingKey ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+              )}
+              <span>{isTestingKey ? 'Probando...' : '🧪 Probar Conexión'}</span>
+            </button>
+
+            {/* Botón Guardar */}
+            <button
+              type="button"
+              onClick={() => handleSaveKey()}
               className="rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-xs font-bold text-white transition-all shrink-0 flex items-center justify-center gap-1.5"
             >
               {keySaved ? <Check className="h-3.5 w-3.5" /> : null}
-              <span>{keySaved ? '¡Guardada!' : 'Guardar API Key'}</span>
+              <span>{keySaved ? '¡Guardada!' : 'Guardar Clave'}</span>
             </button>
 
             <a
@@ -286,6 +359,31 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
               <ExternalLink className="h-3 w-3" />
             </a>
           </div>
+
+          {/* Banner de resultado de prueba */}
+          {testResult && (
+            <div
+              className={`rounded-xl p-3 text-xs flex items-start gap-2.5 border animate-fade-in ${
+                testResult.success
+                  ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
+                  : 'bg-rose-950/60 border-rose-500/50 text-rose-200'
+              }`}
+            >
+              {testResult.success ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <div>
+                <p className="font-semibold">{testResult.message}</p>
+                {testResult.success && (
+                  <p className="text-[11px] text-emerald-300/80 mt-0.5">
+                    Clave verificada y guardada localmente. Ahora las optimizaciones usarán Gemini 1.5 Flash.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Submit */}

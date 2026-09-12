@@ -51,14 +51,18 @@ export async function POST(req: Request) {
       date_range: { start?: string; end?: string };
     } = body;
 
-    // Detectar API Key desde Header del cliente o Variable de Entorno
+    // Detectar API Key desde Body, Header del cliente o Variable de Entorno
+    const bodyApiKey = typeof body?.gemini_api_key === 'string' ? body.gemini_api_key.trim() : '';
     const headerApiKey = req.headers.get('x-gemini-api-key')?.trim();
     const envApiKey = process.env.GEMINI_API_KEY?.trim();
-    const apiKey = (headerApiKey && headerApiKey.length > 10)
-      ? headerApiKey
-      : (envApiKey && envApiKey !== 'your-gemini-api-key' && envApiKey.length > 10 ? envApiKey : '');
 
-    const apiKeySource = headerApiKey && headerApiKey.length > 10 ? 'header' : (envApiKey && envApiKey.length > 10 ? 'env' : 'none');
+    const rawKey = bodyApiKey || headerApiKey || envApiKey || '';
+    const cleanKey = rawKey.replace(/^['"]|['"]$/g, '').trim();
+    const apiKey = cleanKey.length > 10 && cleanKey !== 'your-gemini-api-key' ? cleanKey : '';
+
+    const apiKeySource: 'body' | 'header' | 'env' | 'none' = bodyApiKey && cleanKey.length > 10
+      ? 'body'
+      : (headerApiKey && cleanKey.length > 10 ? 'header' : (envApiKey && cleanKey.length > 10 ? 'env' : 'none'));
 
     // 1. Obtener clima horario real de Mar del Plata
     const weatherSlots = await fetchMDPWeatherForecast();
@@ -145,7 +149,12 @@ ${JSON.stringify(userPayload, null, 2)}`;
           status: 'success',
         });
 
-        const parsedResponse: OptimizerResponse = JSON.parse(responseText);
+        let cleanJson = responseText.trim();
+        if (cleanJson.startsWith('```')) {
+          cleanJson = cleanJson.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        }
+
+        const parsedResponse: OptimizerResponse = JSON.parse(cleanJson);
 
         // FILTRO ANTI-REDUNDANCIA: eliminar sugerencias idénticas a eventos actuales
         const filteredChanges = (parsedResponse.changes || []).filter((ch) => {
@@ -239,7 +248,7 @@ function generateHeuristicOptimization(
   preferences: Partial<UserPreferences>,
   stages: StageLog[],
   startTimeMs: number,
-  apiKeySource: 'header' | 'env' | 'none',
+  apiKeySource: 'body' | 'header' | 'env' | 'none',
   errorReason?: string
 ): OptimizerResponse {
   const changes: OptimizerResponse['changes'] = [];

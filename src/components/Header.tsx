@@ -19,6 +19,7 @@ interface HeaderProps {
   isSupabaseLive: boolean;
   onLockApp: () => void;
   hasGhostProposal: boolean;
+  hasGeminiKey?: boolean;
 }
 
 export function Header({
@@ -35,6 +36,7 @@ export function Header({
   isSupabaseLive,
   onLockApp,
   hasGhostProposal,
+  hasGeminiKey = false,
 }: HeaderProps) {
   // Format week range label
   const d = new Date(selectedDate);
@@ -160,6 +162,24 @@ export function Header({
             <Database className="h-3 w-3" />
             <span>{isSupabaseLive ? 'Realtime' : 'Local'}</span>
           </div>
+
+          {/* Gemini AI Status Badge */}
+          <button
+            onClick={() => setActiveTab('preferences')}
+            className={`hidden sm:flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[11px] font-semibold border transition-all ${
+              hasGeminiKey
+                ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/60'
+                : 'bg-amber-950/50 border-amber-500/50 text-amber-300 hover:bg-amber-900/60'
+            }`}
+            title={
+              hasGeminiKey
+                ? 'Gemini 1.5 Flash conectado (haz clic para editar clave)'
+                : 'Modo heurístico / Sin API Key (haz clic para configurar)'
+            }
+          >
+            <Sparkles className={`h-3 w-3 ${hasGeminiKey ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <span>{hasGeminiKey ? 'Gemini 1.5' : 'IA Offline'}</span>
+          </button>
 
           {/* Smart Schedule Importer Button */}
           <button

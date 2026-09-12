@@ -60,6 +60,7 @@ export default function Home() {
 
   // AI Logs Inspector Modal
   const [isLogsModalOpen, setIsLogsModalOpen] = useState<boolean>(false);
+  const [hasGeminiKey, setHasGeminiKey] = useState<boolean>(false);
 
   // Success Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export default function Home() {
     setIsMounted(true);
     const isAuth = DataStore.isAuthenticated();
     setIsAuthenticated(isAuth);
+    setHasGeminiKey(Boolean(DataStore.getGeminiApiKey()));
   }, []);
 
   // 2. Load Data from Storage / Supabase
@@ -93,6 +95,7 @@ export default function Home() {
       setWorkShifts(shifts);
       setPreferences(prefs);
       setIsSupabaseLive(DataStore.isConfiguredWithSupabase());
+      setHasGeminiKey(Boolean(DataStore.getGeminiApiKey()));
     } catch (e) {
       console.error('Error loading data:', e);
     }
@@ -124,11 +127,12 @@ export default function Home() {
     if (!supabase) return;
 
     const channel = supabase
-      .channel('public:events')
+      .channel('schema-db-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events' },
-        () => {
+        (payload) => {
+          console.log('Realtime event update received:', payload);
           loadData();
         }
       )
@@ -139,17 +143,17 @@ export default function Home() {
     };
   }, [loadData]);
 
-  // Date Navigators
+  // Calendar Week Navigation
   const handlePrevWeek = () => {
-    const prev = new Date(selectedDate);
-    prev.setDate(prev.getDate() - 7);
-    setSelectedDate(prev);
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 7);
+    setSelectedDate(d);
   };
 
   const handleNextWeek = () => {
-    const next = new Date(selectedDate);
-    next.setDate(next.getDate() + 7);
-    setSelectedDate(next);
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + 7);
+    setSelectedDate(d);
   };
 
   const handleToday = () => {
@@ -241,6 +245,7 @@ export default function Home() {
   const handleSavePreferences = async (prefs: UserPreferences) => {
     await DataStore.savePreferences(prefs);
     setPreferences(prefs);
+    setHasGeminiKey(Boolean(DataStore.getGeminiApiKey()));
     showToast('Preferencias actualizadas');
   };
 
@@ -248,18 +253,19 @@ export default function Home() {
   const handleReconsider = async () => {
     setIsOptimizing(true);
     try {
+      const apiKey = DataStore.getGeminiApiKey();
       const payload = {
         events,
         contacts,
         busy_slots: busySlots,
         work_shifts: workShifts,
         preferences,
+        gemini_api_key: apiKey,
         date_range: {
           start: selectedDate.toISOString(),
         },
       };
 
-      const apiKey = DataStore.getGeminiApiKey();
       const res = await fetch('/api/recalculate', {
         method: 'POST',
         headers: {
@@ -472,6 +478,7 @@ export default function Home() {
         isSupabaseLive={isSupabaseLive}
         onLockApp={handleLockApp}
         hasGhostProposal={Boolean(ghostProposal)}
+        hasGeminiKey={hasGeminiKey}
       />
 
       {/* Main Content Area */}
@@ -521,6 +528,9 @@ export default function Home() {
           <PreferencesModal
             preferences={preferences}
             onSave={handleSavePreferences}
+            onApiKeySaved={() => {
+              setHasGeminiKey(Boolean(DataStore.getGeminiApiKey()));
+            }}
           />
         )}
       </main>
@@ -547,7 +557,10 @@ export default function Home() {
         isOpen={isLogsModalOpen}
         onClose={() => setIsLogsModalOpen(false)}
         logs={ghostProposal?.execution_logs}
-        onApiKeySaved={() => showToast('API Key de Gemini guardada localmente')}
+        onApiKeySaved={() => {
+          setHasGeminiKey(Boolean(DataStore.getGeminiApiKey()));
+          showToast('API Key de Gemini guardada y activa');
+        }}
       />
 
       {/* Event Add/Edit Modal */}

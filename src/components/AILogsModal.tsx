@@ -29,6 +29,8 @@ export function AILogsModal({ isOpen, onClose, logs, onApiKeySaved }: AILogsModa
   const [copied, setCopied] = useState(false);
   const [inputKey, setInputKey] = useState(() => DataStore.getGeminiApiKey());
   const [keySaved, setKeySaved] = useState(false);
+  const [isTestingKey, setIsTestingKey] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   if (!isOpen || !logs) return null;
 
@@ -38,11 +40,55 @@ export function AILogsModal({ isOpen, onClose, logs, onApiKeySaved }: AILogsModa
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSaveKey = () => {
-    DataStore.saveGeminiApiKey(inputKey);
+  const handleSaveKey = (keyVal?: string) => {
+    const val = typeof keyVal === 'string' ? keyVal : inputKey;
+    DataStore.saveGeminiApiKey(val);
     setKeySaved(true);
     setTimeout(() => setKeySaved(false), 2500);
     if (onApiKeySaved) onApiKeySaved();
+  };
+
+  const handleTestKey = async () => {
+    const keyToTest = inputKey.trim();
+    if (!keyToTest || keyToTest.length < 10) {
+      setTestResult({
+        success: false,
+        message: 'Ingresa una clave válida antes de probar.',
+      });
+      return;
+    }
+
+    setIsTestingKey(true);
+    setTestResult(null);
+
+    try {
+      const res = await fetch('/api/gemini/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: keyToTest }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestResult({
+          success: true,
+          message: `¡Conexión exitosa con ${data.model}! Latencia: ${data.latency_ms} ms.`,
+        });
+        handleSaveKey(keyToTest);
+      } else {
+        setTestResult({
+          success: false,
+          message: data.hint || data.error || 'Error conectando con Gemini.',
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: `Error de red: ${err?.message || err}`,
+      });
+    } finally {
+      setIsTestingKey(false);
+    }
   };
 
   const isGemini = logs.provider === 'gemini-1.5-flash';
@@ -94,17 +140,26 @@ export function AILogsModal({ isOpen, onClose, logs, onApiKeySaved }: AILogsModa
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Missing API Key Banner */}
+          {/* Missing API Key or Error Banner */}
           {!isGemini && (
-            <div className="rounded-2xl bg-amber-950/40 p-4 border border-amber-500/40 text-xs space-y-3">
-              <div className="flex items-start gap-2.5 text-amber-200">
-                <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className={`rounded-2xl p-4 border text-xs space-y-3 ${
+              logs.error_details ? 'bg-rose-950/40 border-rose-500/40' : 'bg-amber-950/40 border-amber-500/40'
+            }`}>
+              <div className={`flex items-start gap-2.5 ${logs.error_details ? 'text-rose-200' : 'text-amber-200'}`}>
+                <AlertTriangle className={`h-5 w-5 shrink-0 mt-0.5 ${logs.error_details ? 'text-rose-400' : 'text-amber-400'}`} />
                 <div>
-                  <h4 className="font-bold text-amber-300 text-sm">
-                    No se detectó GEMINI_API_KEY activa
+                  <h4 className={`font-bold text-sm ${logs.error_details ? 'text-rose-300' : 'text-amber-300'}`}>
+                    {logs.error_details ? 'Error en la conexión con Gemini 1.5 Flash' : 'No se detectó GEMINI_API_KEY activa'}
                   </h4>
                   <p className="text-slate-300 mt-1 leading-relaxed">
-                    La optimización se resolvió mediante el motor algorítmico local determinista. Para habilitar <strong>Google Gemini 1.5 Flash</strong> con razonamiento neuronal profundo, ingresa tu clave gratuita de Google AI Studio abajo:
+                    {logs.error_details ? (
+                      <span className="font-mono text-[11px] bg-slate-950/80 p-1.5 rounded-lg block my-1 border border-rose-800/40 text-rose-300">
+                        {logs.error_details}
+                      </span>
+                    ) : null}
+                    {logs.error_details
+                      ? 'La app cayó en el motor de prueba. Verifica o actualiza tu clave de Google AI Studio abajo:'
+                      : 'La optimización se resolvió mediante el motor local. Ingresa tu clave de Google AI Studio abajo:'}
                   </p>
                 </div>
               </div>
@@ -115,18 +170,31 @@ export function AILogsModal({ isOpen, onClose, logs, onApiKeySaved }: AILogsModa
                   <input
                     type="password"
                     value={inputKey}
-                    onChange={(e) => setInputKey(e.target.value)}
+                    onChange={(e) => {
+                      setInputKey(e.target.value);
+                      setTestResult(null);
+                    }}
+                    onBlur={() => handleSaveKey()}
                     placeholder="Pega tu GEMINI_API_KEY aquí (AIzaSy...)"
                     className="w-full rounded-xl bg-slate-900 border border-slate-700 pl-9 pr-3 py-2 text-xs text-white font-mono"
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={handleSaveKey}
+                  onClick={handleTestKey}
+                  disabled={isTestingKey}
+                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 px-3 py-2 text-xs font-bold text-cyan-300 hover:text-white transition-all shrink-0 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>{isTestingKey ? 'Probando...' : '🧪 Probar'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveKey()}
                   className="rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-xs font-bold text-white transition-all shrink-0 flex items-center justify-center gap-1.5"
                 >
                   {keySaved ? <Check className="h-3.5 w-3.5" /> : null}
-                  <span>{keySaved ? '¡Clave Guardada!' : 'Guardar y Usar'}</span>
+                  <span>{keySaved ? '¡Guardada!' : 'Guardar y Usar'}</span>
                 </button>
                 <a
                   href="https://aistudio.google.com/app/apikey"
@@ -134,10 +202,20 @@ export function AILogsModal({ isOpen, onClose, logs, onApiKeySaved }: AILogsModa
                   rel="noreferrer"
                   className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-1 shrink-0"
                 >
-                  <span>Obtener Clave Gratis</span>
+                  <span>Obtener Gratis</span>
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
+
+              {testResult && (
+                <div className={`rounded-xl p-2.5 text-xs font-semibold border ${
+                  testResult.success
+                    ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-200'
+                    : 'bg-rose-950/70 border-rose-500/50 text-rose-200'
+                }`}>
+                  {testResult.message}
+                </div>
+              )}
             </div>
           )}
 

@@ -129,7 +129,9 @@ export function DiffViewerModal({
               <p className="text-xs text-slate-400">
                 {isGemini
                   ? `Optimizado con Gemini 1.5 Flash (${execution_logs?.total_latency_ms}ms)`
-                  : 'Motor heurístico de prueba (GEMINI_API_KEY no detectada)'}
+                  : execution_logs?.error_details
+                  ? `Error en llamada Gemini: ${execution_logs.error_details.slice(0, 45)}...`
+                  : 'Motor heurístico de prueba (GEMINI_API_KEY no configurada)'}
               </p>
             </div>
           </div>
@@ -168,19 +170,36 @@ export function DiffViewerModal({
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
           {/* Alerta si está en fallback */}
           {!isGemini && (
-            <div className="rounded-2xl bg-amber-950/40 border border-amber-500/40 p-3.5 text-xs text-amber-200 flex items-center justify-between gap-3">
+            <div
+              className={`rounded-2xl p-3.5 text-xs flex items-center justify-between gap-3 border ${
+                execution_logs?.error_details
+                  ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                  : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+              }`}
+            >
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
+                <AlertCircle
+                  className={`h-4 w-4 shrink-0 ${
+                    execution_logs?.error_details ? 'text-rose-400' : 'text-amber-400'
+                  }`}
+                />
                 <span>
-                  <strong>Atención:</strong> Se ejecutó el motor local de prueba porque no se detectó una API Key de Gemini.
+                  <strong>Atención:</strong>{' '}
+                  {execution_logs?.error_details
+                    ? `Falló la conexión con Gemini (${execution_logs.error_details}). Se activó el motor de contingencia.`
+                    : 'Se ejecutó el motor local de prueba porque no se detectó una API Key de Gemini.'}
                 </span>
               </div>
               {onOpenLogs && (
                 <button
                   onClick={onOpenLogs}
-                  className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1 text-[11px] shrink-0 transition-all shadow-sm"
+                  className={`rounded-xl font-bold px-3 py-1 text-[11px] shrink-0 transition-all shadow-sm ${
+                    execution_logs?.error_details
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                      : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                  }`}
                 >
-                  Conectar Gemini 1.5 Flash
+                  {execution_logs?.error_details ? 'Ver Error y Clave' : 'Configurar Clave'}
                 </button>
               )}
             </div>

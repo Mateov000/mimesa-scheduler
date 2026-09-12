@@ -46,7 +46,7 @@ export interface StageLog {
 export interface ExecutionLogs {
   provider: 'gemini-1.5-flash' | 'heuristic_fallback';
   model_name: string;
-  api_key_source: 'header' | 'env' | 'none';
+  api_key_source: 'body' | 'header' | 'env' | 'none';
   total_latency_ms: number;
   timestamp: string;
   stages: StageLog[];

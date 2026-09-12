@@ -66,12 +66,14 @@ export async function POST(req: Request) {
       reference_date?: string;
     } = body;
 
-    // Detectar API Key desde Header del cliente o Variable de Entorno
+    // Detectar API Key desde Body, Header del cliente o Variable de Entorno
+    const bodyApiKey = typeof body?.gemini_api_key === 'string' ? body.gemini_api_key.trim() : '';
     const headerApiKey = req.headers.get('x-gemini-api-key')?.trim();
     const envApiKey = process.env.GEMINI_API_KEY?.trim();
-    const apiKey = (headerApiKey && headerApiKey.length > 10)
-      ? headerApiKey
-      : (envApiKey && envApiKey !== 'your-gemini-api-key' && envApiKey.length > 10 ? envApiKey : '');
+
+    const rawKey = bodyApiKey || headerApiKey || envApiKey || '';
+    const cleanKey = rawKey.replace(/^['"]|['"]$/g, '').trim();
+    const apiKey = cleanKey.length > 10 && cleanKey !== 'your-gemini-api-key' ? cleanKey : '';
 
     // Si hay API key configurada, usar Gemini 1.5 Flash multimodal
     if (apiKey) {
@@ -110,7 +112,11 @@ Instrucción o texto del usuario: "${prompt || 'Extrae todos los horarios visibl
 
         const result = await model.generateContent(contents);
         const text = result.response.text();
-        const parsed: ParseScheduleResponse = JSON.parse(text);
+        let cleanJson = text.trim();
+        if (cleanJson.startsWith('```')) {
+          cleanJson = cleanJson.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        }
+        const parsed: ParseScheduleResponse = JSON.parse(cleanJson);
 
         return NextResponse.json(parsed);
       } catch (geminiErr) {

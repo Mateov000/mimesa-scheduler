@@ -119,6 +119,7 @@ export function SmartScheduleImporter({
           prompt: prompt.trim(),
           image: imagePreview,
           reference_date: selectedDate.toISOString(),
+          gemini_api_key: apiKey,
         }),
       });
 
