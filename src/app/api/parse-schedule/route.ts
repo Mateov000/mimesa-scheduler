@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { executeGeminiWithFallback } from '@/lib/gemini';
 import { ParsedScheduleItem, ParseScheduleResponse } from '@/types/parser';
 import { EventCategory, LocationType } from '@/types/database';
@@ -75,6 +76,10 @@ export async function POST(req: Request) {
     const cleanKey = rawKey.replace(/^['"]|['"]$/g, '').trim();
     const apiKey = cleanKey.length > 10 && cleanKey !== 'your-gemini-api-key' ? cleanKey : '';
 
+    const preferredModel = typeof body?.gemini_model === 'string'
+      ? body.gemini_model.trim()
+      : (req.headers.get('x-gemini-model')?.trim() || '');
+
     // Si hay API key configurada, usar Gemini multimodal (con resolución y fallback)
     if (apiKey) {
       try {
@@ -105,6 +110,7 @@ Instrucción o texto del usuario: "${prompt || 'Extrae todos los horarios visibl
           systemInstruction: PARSER_SYSTEM_PROMPT,
           temperature: 0.1,
           responseMimeType: 'application/json',
+          preferredModel: preferredModel || undefined,
         });
 
         const text = geminiRes.text;

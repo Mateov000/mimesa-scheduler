@@ -120,6 +120,7 @@ export function SmartScheduleImporter({
           image: imagePreview,
           reference_date: selectedDate.toISOString(),
           gemini_api_key: apiKey,
+          gemini_model: DataStore.getGeminiModel(),
         }),
       });
 

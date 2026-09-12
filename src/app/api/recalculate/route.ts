@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { executeGeminiWithFallback } from '@/lib/gemini';
 import { Contact, ContactBusySlot, Event, UserPreferences, WorkShift } from '@/types/database';
 import { OptimizerResponse, StageLog, ExecutionLogs } from '@/types/optimizer';
@@ -63,6 +64,10 @@ export async function POST(req: Request) {
     const apiKeySource: 'body' | 'header' | 'env' | 'none' = bodyApiKey && cleanKey.length > 10
       ? 'body'
       : (headerApiKey && cleanKey.length > 10 ? 'header' : (envApiKey && cleanKey.length > 10 ? 'env' : 'none'));
+
+    const preferredModel = typeof body?.gemini_model === 'string'
+      ? body.gemini_model.trim()
+      : (req.headers.get('x-gemini-model')?.trim() || '');
 
     // 1. Obtener clima horario real de Mar del Plata
     const weatherSlots = await fetchMDPWeatherForecast();
@@ -129,6 +134,7 @@ ${JSON.stringify(userPayload, null, 2)}`;
           systemInstruction: SYSTEM_PROMPT,
           temperature: 0.15,
           responseMimeType: 'application/json',
+          preferredModel: preferredModel || undefined,
         });
 
         const responseText = geminiRes.text;
@@ -173,7 +179,7 @@ ${JSON.stringify(userPayload, null, 2)}`;
         });
 
         const executionLogs: ExecutionLogs = {
-          provider: 'gemini-1.5-flash',
+          provider: 'gemini',
           model_name: geminiRes.modelUsed,
           api_key_source: apiKeySource,
           total_latency_ms: Date.now() - startTimeMs,

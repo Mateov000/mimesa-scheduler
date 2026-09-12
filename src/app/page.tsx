@@ -261,6 +261,7 @@ export default function Home() {
         work_shifts: workShifts,
         preferences,
         gemini_api_key: apiKey,
+        gemini_model: DataStore.getGeminiModel(),
         date_range: {
           start: selectedDate.toISOString(),
         },

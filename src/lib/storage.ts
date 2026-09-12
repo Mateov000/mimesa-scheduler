@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   PREFERENCES: 'mimesa_preferences_v1',
   PASSCODE_AUTH: 'mimesa_authenticated_v1',
   GEMINI_API_KEY: 'mimesa_gemini_api_key_v1',
+  GEMINI_MODEL: 'mimesa_gemini_model_v1',
 };
 
 export class DataStore {
@@ -360,6 +361,25 @@ export class DataStore {
         localStorage.setItem(STORAGE_KEYS.GEMINI_API_KEY, key.trim());
       } else {
         localStorage.removeItem(STORAGE_KEYS.GEMINI_API_KEY);
+      }
+    }
+  }
+
+  // --- Gemini Model ---
+  static getGeminiModel(): string {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.GEMINI_MODEL);
+      if (stored && stored.trim().length > 0) return stored.trim();
+    }
+    return 'gemini-3.8-flash';
+  }
+
+  static saveGeminiModel(model: string): void {
+    if (typeof window !== 'undefined') {
+      if (model && model.trim().length > 0) {
+        localStorage.setItem(STORAGE_KEYS.GEMINI_MODEL, model.trim());
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.GEMINI_MODEL);
       }
     }
   }

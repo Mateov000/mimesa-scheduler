@@ -12,9 +12,20 @@ export interface ModelResolutionResult {
   apiVersion?: 'v1' | 'v1beta';
   availableModels: string[];
   discoveryMethod: 'list_models' | 'fallback_probe';
+  inspectionError?: string;
+}
+
+export interface InspectionResult {
+  ok: boolean;
+  models: DiscoveredGeminiModel[];
+  errorMessage?: string;
+  statusCode?: number;
+  hint?: string;
 }
 
 export const PREFERRED_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash-latest',
   'gemini-1.5-flash-002',
@@ -22,7 +33,6 @@ export const PREFERRED_MODELS = [
   'gemini-1.5-flash',
   'gemini-2.0-flash-lite',
   'gemini-1.5-flash-8b',
-  'gemini-2.5-flash',
   'gemini-2.0-flash-exp',
   'gemini-1.5-pro',
   'gemini-1.5-pro-latest',
@@ -34,12 +44,18 @@ const resolutionCache = new Map<string, { result: ModelResolutionResult; timesta
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
 /**
- * Queries Google Generative Language API's ListModels endpoint to see exactly
- * which models this specific API key is authorized to use for generateContent.
+ * Inspects an API key directly against Google's ListModels endpoint to get
+ * the exact status and authorized models or actionable error message from Google.
  */
-export async function listAvailableModels(apiKey: string): Promise<DiscoveredGeminiModel[]> {
+export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult> {
   const cleanKey = apiKey.replace(/^['"]|['"]$/g, '').trim();
+  if (!cleanKey) {
+    return { ok: false, models: [], errorMessage: 'API Key vacía' };
+  }
+
   const versions: ('v1beta' | 'v1')[] = ['v1beta', 'v1'];
+  let lastErrorJson: any = null;
+  let lastStatus = 0;
   const allDiscovered: DiscoveredGeminiModel[] = [];
   const seen = new Set<string>();
 
@@ -49,12 +65,14 @@ export async function listAvailableModels(apiKey: string): Promise<DiscoveredGem
       const res = await fetch(url, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(6000),
       });
 
+      lastStatus = res.status;
+
       if (!res.ok) {
-        const errJson = await res.json().catch(() => null);
-        console.warn(`[Gemini ListModels ${apiVer}] HTTP ${res.status}:`, errJson?.error?.message || res.statusText);
+        lastErrorJson = await res.json().catch(() => null);
+        console.warn(`[Gemini inspectKey ${apiVer}] HTTP ${res.status}:`, lastErrorJson?.error?.message || res.statusText);
         continue;
       }
 
@@ -75,29 +93,78 @@ export async function listAvailableModels(apiKey: string): Promise<DiscoveredGem
         }
       }
     } catch (err: any) {
-      console.warn(`[Gemini ListModels ${apiVer}] Error fetching models:`, err?.message || err);
+      console.warn(`[Gemini inspectKey ${apiVer}] Network error:`, err?.message || err);
     }
   }
 
-  return allDiscovered;
+  if (allDiscovered.length > 0) {
+    return {
+      ok: true,
+      models: allDiscovered,
+    };
+  }
+
+  // If no models were discovered, explain why from Google's response
+  const rawMsg = lastErrorJson?.error?.message || '';
+  let hint = 'No se encontraron modelos disponibles para esta clave.';
+
+  if (rawMsg.includes('API_KEY_INVALID') || rawMsg.includes('API key not valid')) {
+    hint = 'La clave ingresada no es válida. Revisa o genera una nueva en Google AI Studio (aistudio.google.com).';
+  } else if (rawMsg.includes('Generative Language API has not been used') || rawMsg.includes('disabled')) {
+    hint = 'La API "Generative Language" no está habilitada en el proyecto de Google Cloud de esta clave. Recomendación: Crea una clave gratuita directa en https://aistudio.google.com/app/apikey.';
+  } else if (rawMsg.includes('The caller does not have permission') || lastStatus === 403) {
+    hint = 'Permiso denegado por Google. Asegúrate de generar la clave en Google AI Studio (aistudio.google.com), no desde un proyecto empresarial restringido.';
+  } else if (lastStatus === 404) {
+    hint = 'El servicio de modelos de Google respondió 404. Tu proyecto de Google no tiene acceso a la Generative Language API. Genera una clave gratuita en aistudio.google.com.';
+  }
+
+  return {
+    ok: false,
+    models: [],
+    statusCode: lastStatus,
+    errorMessage: rawMsg || (lastStatus ? `HTTP Error ${lastStatus} al consultar modelos de Google` : 'Error de red contactando a Google'),
+    hint,
+  };
+}
+
+/**
+ * Lists available models for generateContent.
+ */
+export async function listAvailableModels(apiKey: string): Promise<DiscoveredGeminiModel[]> {
+  const inspection = await inspectGeminiKey(apiKey);
+  return inspection.models;
 }
 
 /**
  * Resolves the best supported model for the given API key.
- * If ListModels works, picks the best available model.
- * If ListModels fails, falls back to the priority candidate list.
  */
-export async function resolveBestModel(apiKey: string): Promise<ModelResolutionResult> {
+export async function resolveBestModel(apiKey: string, preferredModel?: string): Promise<ModelResolutionResult> {
   const cleanKey = apiKey.replace(/^['"]|['"]$/g, '').trim();
   const cached = resolutionCache.get(cleanKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+  if (!preferredModel && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.result;
   }
 
-  const discovered = await listAvailableModels(cleanKey);
+  const inspection = await inspectGeminiKey(cleanKey);
+  const discovered = inspection.models;
   const discoveredNames = discovered.map(m => m.name);
 
   if (discovered.length > 0) {
+    // 0. If preferredModel requested and discovered, use it
+    if (preferredModel && preferredModel !== 'auto') {
+      const match = discovered.find(m => m.name.toLowerCase() === preferredModel.toLowerCase());
+      if (match) {
+        const result: ModelResolutionResult = {
+          modelName: match.name,
+          apiVersion: match.apiVersion,
+          availableModels: discoveredNames,
+          discoveryMethod: 'list_models',
+        };
+        resolutionCache.set(cleanKey, { result, timestamp: Date.now() });
+        return result;
+      }
+    }
+
     // 1. Check preferred models in order
     for (const pref of PREFERRED_MODELS) {
       const match = discovered.find(m => m.name === pref);
@@ -150,12 +217,13 @@ export async function resolveBestModel(apiKey: string): Promise<ModelResolutionR
     return result;
   }
 
-  // If ListModels returned no models or failed, default to modern gemini-2.0-flash with fallback list
+  // If inspection failed with a specific Google error, preserve it
   const defaultResult: ModelResolutionResult = {
-    modelName: 'gemini-2.0-flash',
+    modelName: (preferredModel && preferredModel !== 'auto') ? preferredModel : 'gemini-3.8-flash',
     apiVersion: 'v1beta',
-    availableModels: PREFERRED_MODELS.slice(0, 5),
+    availableModels: PREFERRED_MODELS.slice(0, 6),
     discoveryMethod: 'fallback_probe',
+    inspectionError: inspection.errorMessage,
   };
   return defaultResult;
 }
@@ -172,6 +240,7 @@ export async function executeGeminiWithFallback(
     temperature?: number;
     responseMimeType?: string;
     maxOutputTokens?: number;
+    preferredModel?: string;
   }
 ): Promise<{
   text: string;
@@ -180,13 +249,24 @@ export async function executeGeminiWithFallback(
   availableModels: string[];
 }> {
   const cleanKey = apiKey.replace(/^['"]|['"]$/g, '').trim();
-  const resolved = await resolveBestModel(cleanKey);
+  const userRequested = generateParams.preferredModel?.trim();
+  const resolved = await resolveBestModel(cleanKey, userRequested);
 
-  // Build candidate list starting with the resolved model
-  const candidates = [
+  // If inspection specifically reported that the API key has an error or is disabled, throw early
+  if (resolved.discoveryMethod === 'fallback_probe' && resolved.inspectionError) {
+    throw new Error(`Google AI rechazó la clave: ${resolved.inspectionError}. Asegúrate de crear una clave en https://aistudio.google.com/app/apikey.`);
+  }
+
+  // Build candidate list: prioritize userRequested, then resolved model, then candidates
+  const candidateList = [
+    ...(userRequested && userRequested !== 'auto' ? [userRequested] : []),
     resolved.modelName,
-    ...PREFERRED_MODELS.filter(m => m !== resolved.modelName),
+    ...PREFERRED_MODELS,
+    ...(resolved.availableModels || []),
   ];
+
+  // Deduplicate candidate list
+  const candidates = Array.from(new Set(candidateList.filter(Boolean)));
 
   const genAI = new GoogleGenerativeAI(cleanKey);
   let lastError: any = null;
@@ -211,7 +291,7 @@ export async function executeGeminiWithFallback(
       const text = result.response.text();
       const latencyMs = Date.now() - start;
 
-      // If we used a fallback that worked, update cache with the working model
+      // Update cache with the working model
       if (modelCandidate !== resolved.modelName) {
         resolutionCache.set(cleanKey, {
           result: {
@@ -237,12 +317,14 @@ export async function executeGeminiWithFallback(
         errMsg.includes('is not supported for generateContent');
 
       if (!isNotFound) {
-        // If it's an authentication, quota, or network error, rethrow immediately
+        // If it's an authentication, quota, or permission error, throw immediately
         throw err;
       }
       console.warn(`[Gemini Fallback] Model '${modelCandidate}' failed with 404, trying next candidate...`);
     }
   }
 
-  throw lastError || new Error('No compatible Gemini model found for this API key.');
+  // If ALL candidates failed with 404
+  const guidance = 'Todos los modelos de Gemini devolvieron 404 para tu API Key. Esto ocurre típicamente cuando la clave proviene de Google Cloud Console sin la "Generative Language API" habilitada. Crea una clave gratuita directa en https://aistudio.google.com/app/apikey para solucionarlo de inmediato.';
+  throw new Error(`${lastError?.message || 'Modelos no disponibles'} - ${guidance}`);
 }

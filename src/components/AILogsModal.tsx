@@ -121,10 +121,12 @@ export function AILogsModal({ isOpen, onClose, logs, onApiKeySaved }: AILogsModa
                       : 'bg-amber-950 text-amber-300 border-amber-700/60'
                   }`}
                 >
+                  {isGemini ? '🟢 Gemini 1.5 Flash Conectado' : '🟡 Modo Fallback Heurístico'}
                   {isGemini ? `🟢 ${logs.model_name || 'Gemini'} Conectado` : '🟡 Modo Fallback Heurístico'}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
+                Latencia total: <span className="font-mono text-cyan-300 font-semibold">{logs.total_latency_ms}ms</span> • Clave: <span className="font-mono text-slate-300">{logs.api_key_source === 'header' ? 'Guardada en App' : logs.api_key_source === 'env' ? 'Variable de Entorno' : 'No configurada'}</span>
                 Latencia total: <span className="font-mono text-cyan-300 font-semibold">{logs.total_latency_ms}ms</span> • Clave: <span className="font-mono text-slate-300">{(logs.api_key_source === 'header' || logs.api_key_source === 'body') ? 'Guardada en App' : logs.api_key_source === 'env' ? 'Variable de Entorno' : 'No configurada'}</span>
               </p>
             </div>

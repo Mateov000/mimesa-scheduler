@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Sliders, Moon, BookOpen, Users, Dumbbell, Shield, Car, Save, Check, Key, ExternalLink, Eye, EyeOff, Sparkles, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Sliders, Moon, BookOpen, Users, Dumbbell, Shield, Car, Save, Check, Key, ExternalLink, Eye, EyeOff, Sparkles, RefreshCw, AlertCircle, CheckCircle2, Cpu } from 'lucide-react';
 import { UserPreferences } from '@/types/database';
 import { DataStore } from '@/lib/storage';
 
@@ -20,6 +20,7 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
   const [commuteMinutes, setCommuteMinutes] = useState(preferences.commute_duration_minutes);
   const [targetSleep, setTargetSleep] = useState(preferences.target_sleep_hours);
   const [geminiKey, setGeminiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState('gemini-3.8-flash');
   const [showKey, setShowKey] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
   const [isTestingKey, setIsTestingKey] = useState(false);
@@ -28,11 +29,14 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
 
   useEffect(() => {
     setGeminiKey(DataStore.getGeminiApiKey());
+    setGeminiModel(DataStore.getGeminiModel() || 'gemini-3.8-flash');
   }, []);
 
-  const handleSaveKey = (keyToSave?: string) => {
-    const val = typeof keyToSave === 'string' ? keyToSave : geminiKey;
-    DataStore.saveGeminiApiKey(val);
+  const handleSaveKey = (keyToSave?: string, modelToSave?: string) => {
+    const valKey = typeof keyToSave === 'string' ? keyToSave : geminiKey;
+    const valModel = typeof modelToSave === 'string' ? modelToSave : geminiModel;
+    DataStore.saveGeminiApiKey(valKey);
+    DataStore.saveGeminiModel(valModel);
     setKeySaved(true);
     setTimeout(() => setKeySaved(false), 2500);
     if (onApiKeySaved) onApiKeySaved();
@@ -55,7 +59,7 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
       const res = await fetch('/api/gemini/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: keyToTest }),
+        body: JSON.stringify({ apiKey: keyToTest, preferredModel: geminiModel }),
       });
 
       const data = await res.json();
@@ -64,8 +68,11 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
           success: true,
           message: `¡Conexión exitosa con ${data.model}! Latencia: ${data.latency_ms} ms.`,
         });
-        // Auto-guardar la clave probada exitosamente
-        handleSaveKey(keyToTest);
+        // Auto-guardar la clave y el modelo probado exitosamente
+        handleSaveKey(keyToTest, data.model || geminiModel);
+        if (data.model && data.model !== geminiModel) {
+          setGeminiModel(data.model);
+        }
       } else {
         setTestResult({
           success: false,
@@ -360,6 +367,37 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
             </a>
           </div>
 
+          {/* Selector de Modelo Gemini */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t border-slate-800/60">
+            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 shrink-0">
+              <Cpu className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Modelo Gemini:</span>
+            </label>
+            <div className="relative flex-1">
+              <input
+                type="text"
+                list="gemini-models-list"
+                value={geminiModel}
+                onChange={(e) => {
+                  setGeminiModel(e.target.value);
+                  handleSaveKey(geminiKey, e.target.value);
+                }}
+                placeholder="gemini-3.8-flash"
+                className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-xs text-cyan-300 font-mono"
+              />
+              <datalist id="gemini-models-list">
+                <option value="gemini-3.8-flash">gemini-3.8-flash (Recomendado)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash (Estándar)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                <option value="auto">auto (Detección automática de Google)</option>
+              </datalist>
+            </div>
+            <span className="text-[11px] text-slate-500">
+              Prueba gemini-3.8-flash, gemini-2.5-flash o personalizado.
+            </span>
+          </div>
+
           {/* Banner de resultado de prueba */}
           {testResult && (
             <div
@@ -378,7 +416,7 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
                 <p className="font-semibold">{testResult.message}</p>
                 {testResult.success && (
                   <p className="text-[11px] text-emerald-300/80 mt-0.5">
-                    Clave verificada y guardada localmente. Ahora las optimizaciones usarán Google Gemini.
+                    Clave verificada y guardada localmente. Las optimizaciones usarán este modelo.
                   </p>
                 )}
               </div>
