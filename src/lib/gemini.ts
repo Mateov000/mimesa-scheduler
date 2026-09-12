@@ -311,20 +311,41 @@ export async function executeGeminiWithFallback(
     } catch (err: any) {
       lastError = err;
       const errMsg = err?.message || String(err);
-      // Only continue to next candidate if it's a 404 / model not found error
-      const isNotFound = errMsg.includes('404') ||
-        errMsg.includes('not found') ||
-        errMsg.includes('is not supported for generateContent');
 
-      if (!isNotFound) {
-        // If it's an authentication, quota, or permission error, throw immediately
+      // Si la clave no es válida en lo absoluto, no tiene sentido probar más modelos
+      const isInvalidKey = errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid');
+      if (isInvalidKey) {
         throw err;
       }
-      console.warn(`[Gemini Fallback] Model '${modelCandidate}' failed with 404, trying next candidate...`);
+
+      // Failover automático ante:
+      // 1) 404 Modelo no encontrado o deprecado
+      // 2) 503 / 500 / 502 / 504 Alta demanda temporal ("high demand", "Service Unavailable", "overloaded")
+      // 3) 429 Cuota puntual excedida ("RESOURCE_EXHAUSTED", "Too Many Requests")
+      const shouldFailover =
+        errMsg.includes('404') ||
+        errMsg.includes('not found') ||
+        errMsg.includes('is not supported for generateContent') ||
+        errMsg.includes('503') ||
+        errMsg.includes('Service Unavailable') ||
+        errMsg.includes('high demand') ||
+        errMsg.includes('overloaded') ||
+        errMsg.includes('500') ||
+        errMsg.includes('502') ||
+        errMsg.includes('504') ||
+        errMsg.includes('429') ||
+        errMsg.includes('RESOURCE_EXHAUSTED');
+
+      if (shouldFailover) {
+        console.warn(`[Gemini Failover] Modelo '${modelCandidate}' con error (${errMsg.slice(0, 75)}...), probando siguiente candidato...`);
+        continue;
+      }
+
+      throw err;
     }
   }
 
-  // If ALL candidates failed with 404
-  const guidance = 'Todos los modelos de Gemini devolvieron 404 para tu API Key. Esto ocurre típicamente cuando la clave proviene de Google Cloud Console sin la "Generative Language API" habilitada. Crea una clave gratuita directa en https://aistudio.google.com/app/apikey para solucionarlo de inmediato.';
+  // Si todos los candidatos fallaron
+  const guidance = 'Ningún modelo de Gemini respondió exitosamente. Si fue error 503 ("high demand"), los servidores de Google AI están experimentando un pico de tráfico; puedes cambiar a gemini-2.5-flash o gemini-2.0-flash en Preferencias. Si fue 404, genera una clave en https://aistudio.google.com/app/apikey.';
   throw new Error(`${lastError?.message || 'Modelos no disponibles'} - ${guidance}`);
 }
