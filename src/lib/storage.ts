@@ -369,9 +369,17 @@ export class DataStore {
   static getGeminiModel(): string {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem(STORAGE_KEYS.GEMINI_MODEL);
-      if (stored && stored.trim().length > 0) return stored.trim();
+      if (
+        stored &&
+        stored.trim().length > 0 &&
+        stored !== 'gemini-2.5-flash' &&
+        stored !== 'gemini-3.8-flash' &&
+        stored !== 'gemini-pro'
+      ) {
+        return stored.trim();
+      }
     }
-    return 'gemini-2.0-flash';
+    return 'gemini-3.6-flash';
   }
 
   static saveGeminiModel(model: string): void {

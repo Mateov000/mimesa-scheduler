@@ -18,20 +18,18 @@ export async function POST(req: Request) {
 
     const preferredModel = String(body?.preferredModel || body?.gemini_model || req.headers.get('x-gemini-model') || '').trim();
 
-    // 1. Diagnóstico previo con ListModels
-    const inspection = await inspectGeminiKey(cleanKey);
-    if (!inspection.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: inspection.errorMessage || 'Error validando la API Key en Google AI Studio',
-          hint: inspection.hint,
-        },
-        { status: 400 }
-      );
+    // 1. Diagnóstico informativo con ListModels (no bloqueante)
+    let discoveredModels: string[] = [];
+    try {
+      const inspection = await inspectGeminiKey(cleanKey);
+      if (inspection.ok && inspection.models.length > 0) {
+        discoveredModels = inspection.models.map((m) => m.name);
+      }
+    } catch {
+      // Silencioso: si ListModels falla, executeGeminiWithFallback probará directamente los modelos candidatos
     }
 
-    // 2. Si ListModels encontró modelos, ejecutar prueba de ping
+    // 2. Ejecutar prueba real de generación con fallback rápido
     const result = await executeGeminiWithFallback(cleanKey, {
       contents: 'ping',
       temperature: 0,
@@ -43,7 +41,7 @@ export async function POST(req: Request) {
       success: true,
       model: result.modelUsed,
       latency_ms: result.latencyMs,
-      available_models: result.availableModels,
+      available_models: discoveredModels.length > 0 ? discoveredModels : result.availableModels,
       message: `Conexión exitosa con Google Gemini (${result.modelUsed})`,
       response_preview: result.text.trim(),
     });

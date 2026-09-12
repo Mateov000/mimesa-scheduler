@@ -25,6 +25,7 @@ export interface InspectionResult {
 
 // Modelos textuales de alta velocidad en orden de fiabilidad y disponibilidad
 export const PREFERRED_MODELS = [
+  'gemini-3.6-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
   'gemini-2.5-flash',
@@ -160,7 +161,8 @@ export async function executeGeminiWithFallback(
   if (userRequested && userRequested !== 'auto' && !NON_TEXT_MODEL_REGEX.test(userRequested)) {
     candidateList.push(userRequested);
   }
-  candidateList.push('gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash');
+  // gemini-3.6-flash es el modelo oficial vigente de Google para nuevas cuentas
+  candidateList.push('gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash');
 
   const candidates = Array.from(new Set(candidateList));
   const genAI = new GoogleGenerativeAI(cleanKey);
@@ -209,6 +211,6 @@ export async function executeGeminiWithFallback(
     }
   }
 
-  const guidance = 'Ningún modelo de Gemini respondió a tiempo. Te recomendamos verificar en Preferencias que esté seleccionado gemini-2.0-flash.';
+  const guidance = 'Ningún modelo de Gemini respondió a tiempo. Te recomendamos verificar en Preferencias que esté seleccionado gemini-3.6-flash.';
   throw new Error(`${lastError?.message || 'Modelos no disponibles'} - ${guidance}`);
 }

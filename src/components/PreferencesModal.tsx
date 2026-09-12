@@ -20,7 +20,7 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
   const [commuteMinutes, setCommuteMinutes] = useState(preferences.commute_duration_minutes);
   const [targetSleep, setTargetSleep] = useState(preferences.target_sleep_hours);
   const [geminiKey, setGeminiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState('gemini-3.8-flash');
+  const [geminiModel, setGeminiModel] = useState('gemini-3.6-flash');
   const [showKey, setShowKey] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
   const [isTestingKey, setIsTestingKey] = useState(false);
@@ -29,7 +29,7 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
 
   useEffect(() => {
     setGeminiKey(DataStore.getGeminiApiKey());
-    setGeminiModel(DataStore.getGeminiModel() || 'gemini-3.8-flash');
+    setGeminiModel(DataStore.getGeminiModel() || 'gemini-3.6-flash');
   }, []);
 
   const handleSaveKey = (keyToSave?: string, modelToSave?: string) => {
@@ -382,19 +382,18 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
                   setGeminiModel(e.target.value);
                   handleSaveKey(geminiKey, e.target.value);
                 }}
-                placeholder="gemini-3.8-flash"
+                placeholder="gemini-3.6-flash"
                 className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-xs text-cyan-300 font-mono"
               />
               <datalist id="gemini-models-list">
-                <option value="gemini-3.8-flash">gemini-3.8-flash (Recomendado)</option>
-                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                <option value="gemini-3.6-flash">gemini-3.6-flash (Recomendado por Google)</option>
                 <option value="gemini-2.0-flash">gemini-2.0-flash (Estándar)</option>
                 <option value="gemini-1.5-flash">gemini-1.5-flash</option>
                 <option value="auto">auto (Detección automática de Google)</option>
               </datalist>
             </div>
             <span className="text-[11px] text-slate-500">
-              Prueba gemini-3.8-flash, gemini-2.5-flash o personalizado.
+              gemini-3.6-flash es el modelo oficial vigente para cuentas nuevas.
             </span>
           </div>
 
