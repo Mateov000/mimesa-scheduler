@@ -8,11 +8,13 @@ import { WorkShiftsManager } from '@/components/WorkShiftsManager';
 import { PreferencesModal } from '@/components/PreferencesModal';
 import { DiffViewerModal } from '@/components/DiffViewerModal';
 import { EventModal } from '@/components/EventModal';
+import { SmartScheduleImporter } from '@/components/SmartScheduleImporter';
 import { PasscodeLock } from '@/components/PasscodeLock';
 import { DataStore } from '@/lib/storage';
 import { getSupabaseClient } from '@/lib/supabase';
 import { Event, Contact, ContactBusySlot, WorkShift, UserPreferences, EventCategory, LocationType } from '@/types/database';
 import { OptimizerResponse } from '@/types/optimizer';
+import { ParsedScheduleItem } from '@/types/parser';
 import { HourlyWeatherSlot } from '@/lib/weather';
 import { RefreshCw } from 'lucide-react';
 
@@ -51,6 +53,9 @@ export default function Home() {
   const [isEventModalOpen, setIsEventModalOpen] = useState<boolean>(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [defaultEventDate, setDefaultEventDate] = useState<Date | undefined>(undefined);
+
+  // Smart Schedule Importer Modal
+  const [isImporterOpen, setIsImporterOpen] = useState<boolean>(false);
 
   // Success Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -348,6 +353,51 @@ export default function Home() {
     );
   };
 
+  // Import Parsed Events from Text or Image
+  const handleImportParsedEvents = async (items: ParsedScheduleItem[]) => {
+    let currentEvents = [...events];
+    let currentShifts = [...workShifts];
+
+    for (const it of items) {
+      const newEvent: Event = {
+        id: `ev-imp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        title: it.title,
+        category: it.category,
+        start_time: it.start_time,
+        end_time: it.end_time,
+        is_locked: it.is_locked,
+        location: it.location,
+        location_detail: it.location_detail || null,
+        contact_id: null,
+        cannabis_consumed: false,
+        weather_dependent: false,
+        notes: it.notes || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      currentEvents.push(newEvent);
+
+      if (it.is_work_shift && it.branch) {
+        const newShift: WorkShift = {
+          id: `ws-imp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          branch: it.branch,
+          start_time: it.start_time,
+          end_time: it.end_time,
+          is_confirmed: true,
+          notes: it.notes || `Turno ${it.branch} importado con IA`,
+          created_at: new Date().toISOString(),
+        };
+        currentShifts.push(newShift);
+        await DataStore.saveWorkShift(newShift);
+      }
+    }
+
+    setEvents(currentEvents);
+    setWorkShifts(currentShifts);
+    await DataStore.saveEvents(currentEvents);
+    showToast(`¡Se importaron ${items.length} bloques al calendario con éxito!`);
+  };
+
   // Lock session
   const handleLockApp = () => {
     DataStore.setAuthenticated(false);
@@ -408,6 +458,7 @@ export default function Home() {
         onNextWeek={handleNextWeek}
         onToday={handleToday}
         onReconsider={handleReconsider}
+        onOpenImporter={() => setIsImporterOpen(true)}
         isOptimizing={isOptimizing}
         weatherSlots={weatherSlots}
         isSupabaseLive={isSupabaseLive}
@@ -491,6 +542,14 @@ export default function Home() {
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
         onClose={() => setIsEventModalOpen(false)}
+      />
+
+      {/* Smart Multimodal Schedule Importer (Text + Image) */}
+      <SmartScheduleImporter
+        isOpen={isImporterOpen}
+        onClose={() => setIsImporterOpen(false)}
+        selectedDate={selectedDate}
+        onImportEvents={handleImportParsedEvents}
       />
     </div>
   );

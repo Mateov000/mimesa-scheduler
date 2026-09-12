@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Sparkles, Calendar, Users, Briefcase, Sliders, RefreshCw, ChevronLeft, ChevronRight, Lock, Database } from 'lucide-react';
+import { Sparkles, Calendar, Users, Briefcase, Sliders, RefreshCw, ChevronLeft, ChevronRight, Lock, Database, Camera } from 'lucide-react';
 import { WeatherWidget } from './WeatherWidget';
 import { HourlyWeatherSlot } from '@/lib/weather';
 
@@ -13,6 +13,7 @@ interface HeaderProps {
   onNextWeek: () => void;
   onToday: () => void;
   onReconsider: () => void;
+  onOpenImporter: () => void;
   isOptimizing: boolean;
   weatherSlots: HourlyWeatherSlot[];
   isSupabaseLive: boolean;
@@ -28,6 +29,7 @@ export function Header({
   onNextWeek,
   onToday,
   onReconsider,
+  onOpenImporter,
   isOptimizing,
   weatherSlots,
   isSupabaseLive,
@@ -158,6 +160,17 @@ export function Header({
             <Database className="h-3 w-3" />
             <span>{isSupabaseLive ? 'Realtime' : 'Local'}</span>
           </div>
+
+          {/* Smart Schedule Importer Button */}
+          <button
+            onClick={onOpenImporter}
+            className="flex items-center gap-1.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 px-3.5 py-2 text-xs font-semibold text-cyan-300 hover:text-white transition-all shadow-md active:scale-95"
+            title="Importar horarios mediante texto o foto con IA"
+          >
+            <Camera className="h-3.5 w-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">📸 Importar Horarios</span>
+            <span className="sm:hidden">📸 IA</span>
+          </button>
 
           {/* Primary Action Button: ⚡ Reconsiderar */}
           <button
