@@ -17,6 +17,7 @@ import { HourlyWeatherSlot } from '@/lib/weather';
 import { RefreshCw } from 'lucide-react';
 
 export default function Home() {
+  const [isMounted, setIsMounted] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'calendar' | 'contacts' | 'shifts' | 'preferences'>('calendar');
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
@@ -59,8 +60,9 @@ export default function Home() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // 1. Initial Auth Check
+  // 1. Initial Mount & Auth Check
   useEffect(() => {
+    setIsMounted(true);
     const isAuth = DataStore.isAuthenticated();
     setIsAuthenticated(isAuth);
   }, []);
@@ -351,6 +353,17 @@ export default function Home() {
     DataStore.setAuthenticated(false);
     setIsAuthenticated(false);
   };
+
+  // Wait until mounted to prevent SSR hydration mismatches
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center" suppressHydrationWarning>
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white font-black text-2xl shadow-lg shadow-cyan-950 animate-pulse">
+          M
+        </div>
+      </div>
+    );
+  }
 
   // If not authenticated, render PIN lock screen
   if (!isAuthenticated) {
