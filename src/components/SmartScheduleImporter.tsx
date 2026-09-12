@@ -17,6 +17,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { ParsedScheduleItem, ParseScheduleResponse } from '@/types/parser';
+import { DataStore } from '@/lib/storage';
 
 interface SmartScheduleImporterProps {
   isOpen: boolean;
@@ -107,9 +108,14 @@ export function SmartScheduleImporter({
     setParseResult(null);
 
     try {
+      const apiKey = DataStore.getGeminiApiKey();
       const res = await fetch('/api/parse-schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'x-gemini-api-key': apiKey } : {}),
+        },
         body: JSON.stringify({
           prompt: prompt.trim(),
           image: imagePreview,
@@ -427,3 +433,4 @@ export function SmartScheduleImporter({
     </div>
   );
 }
+

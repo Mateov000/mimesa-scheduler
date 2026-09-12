@@ -7,6 +7,7 @@ import { ContactsManager } from '@/components/ContactsManager';
 import { WorkShiftsManager } from '@/components/WorkShiftsManager';
 import { PreferencesModal } from '@/components/PreferencesModal';
 import { DiffViewerModal } from '@/components/DiffViewerModal';
+import { AILogsModal } from '@/components/AILogsModal';
 import { EventModal } from '@/components/EventModal';
 import { SmartScheduleImporter } from '@/components/SmartScheduleImporter';
 import { PasscodeLock } from '@/components/PasscodeLock';
@@ -56,6 +57,9 @@ export default function Home() {
 
   // Smart Schedule Importer Modal
   const [isImporterOpen, setIsImporterOpen] = useState<boolean>(false);
+
+  // AI Logs Inspector Modal
+  const [isLogsModalOpen, setIsLogsModalOpen] = useState<boolean>(false);
 
   // Success Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -255,9 +259,14 @@ export default function Home() {
         },
       };
 
+      const apiKey = DataStore.getGeminiApiKey();
       const res = await fetch('/api/recalculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'x-gemini-api-key': apiKey } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -530,8 +539,17 @@ export default function Home() {
           isMinimized={isDiffMinimized}
           onToggleMinimize={() => setIsDiffMinimized(!isDiffMinimized)}
           isApplying={isApplyingChanges}
+          onOpenLogs={() => setIsLogsModalOpen(true)}
         />
       )}
+
+      {/* AI Logs & Prompt Inspector Modal */}
+      <AILogsModal
+        isOpen={isLogsModalOpen}
+        onClose={() => setIsLogsModalOpen(false)}
+        logs={ghostProposal?.execution_logs}
+        onApiKeySaved={() => showToast('API Key de Gemini guardada localmente')}
+      />
 
       {/* Event Add/Edit Modal */}
       <EventModal

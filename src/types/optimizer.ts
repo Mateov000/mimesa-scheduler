@@ -32,11 +32,35 @@ export interface ScheduleChange {
   applied?: boolean;
 }
 
+export interface StageLog {
+  stage_number: number;
+  name: string;
+  description: string;
+  prompt_sent: string;
+  raw_response: string;
+  latency_ms: number;
+  status: 'success' | 'fallback' | 'skipped' | 'error';
+  error_message?: string;
+}
+
+export interface ExecutionLogs {
+  provider: 'gemini-1.5-flash' | 'heuristic_fallback';
+  model_name: string;
+  api_key_source: 'header' | 'env' | 'none';
+  total_latency_ms: number;
+  timestamp: string;
+  stages: StageLog[];
+  overall_system_prompt?: string;
+  user_payload_preview?: string;
+  error_details?: string | null;
+}
+
 export interface OptimizerResponse {
   summary: string;
   scorecards: Scorecards;
   safety_checks: SafetyChecks;
   changes: ScheduleChange[];
   warnings: string[];
+  execution_logs?: ExecutionLogs;
 }
 

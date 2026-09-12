@@ -19,3 +19,4 @@ export interface ParseScheduleResponse {
   items: ParsedScheduleItem[];
   warnings?: string[];
 }
+

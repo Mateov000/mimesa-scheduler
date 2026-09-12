@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   WORK_SHIFTS: 'mimesa_work_shifts_v1',
   PREFERENCES: 'mimesa_preferences_v1',
   PASSCODE_AUTH: 'mimesa_authenticated_v1',
+  GEMINI_API_KEY: 'mimesa_gemini_api_key_v1',
 };
 
 export class DataStore {
@@ -342,6 +343,25 @@ export class DataStore {
 
   static isConfiguredWithSupabase(): boolean {
     return isSupabaseConfigured();
+  }
+
+  // --- Gemini API Key ---
+  static getGeminiApiKey(): string {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.GEMINI_API_KEY);
+      if (stored && stored.trim().length > 0) return stored.trim();
+    }
+    return '';
+  }
+
+  static saveGeminiApiKey(key: string): void {
+    if (typeof window !== 'undefined') {
+      if (key && key.trim().length > 0) {
+        localStorage.setItem(STORAGE_KEYS.GEMINI_API_KEY, key.trim());
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.GEMINI_API_KEY);
+      }
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Sparkles, Calendar, Users, Briefcase, Sliders, RefreshCw, ChevronLeft, ChevronRight, Lock, Database } from 'lucide-react';
 import { Sparkles, Calendar, Users, Briefcase, Sliders, RefreshCw, ChevronLeft, ChevronRight, Lock, Database, Camera } from 'lucide-react';
 import { WeatherWidget } from './WeatherWidget';
 import { HourlyWeatherSlot } from '@/lib/weather';

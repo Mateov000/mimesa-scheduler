@@ -18,6 +18,7 @@ import {
   X,
   AlertCircle,
   ArrowRight,
+  Terminal,
 } from 'lucide-react';
 import { OptimizerResponse, ScheduleChange } from '@/types/optimizer';
 
@@ -32,6 +33,7 @@ interface DiffViewerModalProps {
   isMinimized: boolean;
   onToggleMinimize: () => void;
   isApplying: boolean;
+  onOpenLogs?: () => void;
 }
 
 export function DiffViewerModal({
@@ -45,8 +47,11 @@ export function DiffViewerModal({
   isMinimized,
   onToggleMinimize,
   isApplying,
+  onOpenLogs,
 }: DiffViewerModalProps) {
   const { summary, scorecards, safety_checks, changes = [], warnings = [] } = proposal;
+  const { summary, scorecards, safety_checks, changes = [], warnings = [], execution_logs } = proposal;
+  const isGemini = execution_logs?.provider === 'gemini-1.5-flash';
 
   const formatTimeRange = (start?: string, end?: string) => {
     if (!start || !end) return '';
@@ -112,10 +117,39 @@ export function DiffViewerModal({
             <div>
               <h2 className="text-lg font-bold text-white">Propuesta de Optimización de Rutina</h2>
               <p className="text-xs text-slate-400">Motor Gemini 1.5 Flash + Open-Meteo Mar del Plata</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-white">Propuesta de Optimización</h2>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                    isGemini
+                      ? 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
+                      : 'bg-amber-950 text-amber-300 border-amber-700/60'
+                  }`}
+                >
+                  {isGemini ? '🟢 Gemini 1.5 Flash' : '🟡 Modo Fallback'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                {isGemini
+                  ? `Optimizado con Gemini 1.5 Flash (${execution_logs?.total_latency_ms}ms)`
+                  : 'Motor heurístico de prueba (GEMINI_API_KEY no detectada)'}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenLogs && (
+              <button
+                onClick={onOpenLogs}
+                className="flex items-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition-all border border-cyan-500/30 shadow-sm"
+                title="Inspeccionar prompts y respuestas crudas de la IA"
+              >
+                <Terminal className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">📜 Ver Logs IA</span>
+                <span className="sm:hidden">Logs</span>
+              </button>
+            )}
+
             <button
               onClick={onToggleMinimize}
               className="flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all border border-slate-700"
@@ -135,6 +169,26 @@ export function DiffViewerModal({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {/* Alerta si está en fallback */}
+          {!isGemini && (
+            <div className="rounded-2xl bg-amber-950/40 border border-amber-500/40 p-3.5 text-xs text-amber-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong>Atención:</strong> Se ejecutó el motor local de prueba porque no se detectó una API Key de Gemini.
+                </span>
+              </div>
+              {onOpenLogs && (
+                <button
+                  onClick={onOpenLogs}
+                  className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1 text-[11px] shrink-0 transition-all shadow-sm"
+                >
+                  Conectar Gemini 1.5 Flash
+                </button>
+              )}
+            </div>
+          )}
+
           {/* 1. Resumen Ejecutivo */}
           <div className="rounded-2xl bg-slate-900/90 p-4 border border-cyan-500/30">
             <div className="flex items-start gap-3">
