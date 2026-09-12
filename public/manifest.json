@@ -1,0 +1,23 @@
+{
+  "name": "MiMesa Scheduler - Optimizador de Vida Cotidiana MDP",
+  "short_name": "MiMesa",
+  "description": "Optimizador de rutina personal y gestión de tiempo multicriterio para Mar del Plata",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#0284c7",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+

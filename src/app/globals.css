@@ -1,26 +1,64 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #020617;
+  --foreground: #f8fafc;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #020617;
+  color: #f8fafc;
+  overflow-x: hidden;
+}
+
+/* Custom subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.7);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.9);
+}
+
+/* Ghost View animation */
+@keyframes ghostPulse {
+  0%, 100% {
+    opacity: 0.65;
+    border-color: rgba(56, 189, 248, 0.7);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+  }
+  50% {
+    opacity: 0.95;
+    border-color: rgba(168, 85, 247, 0.9);
+    box-shadow: 0 0 18px rgba(168, 85, 247, 0.4);
+  }
+}
+
+.ghost-block-active {
+  animation: ghostPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(56, 189, 248, 0.07),
+    rgba(56, 189, 248, 0.07) 10px,
+    rgba(168, 85, 247, 0.07) 10px,
+    rgba(168, 85, 247, 0.07) 20px
+  );
+}
+
+/* Glassmorphism */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }

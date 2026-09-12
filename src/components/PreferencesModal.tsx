@@ -1,0 +1,234 @@
+'use client';
+
+import React, { useState } from 'react';
+import { Sliders, Moon, BookOpen, Users, Dumbbell, Shield, Car, Save, Check } from 'lucide-react';
+import { UserPreferences } from '@/types/database';
+
+interface PreferencesModalProps {
+  preferences: UserPreferences;
+  onSave: (prefs: UserPreferences) => Promise<void>;
+}
+
+export function PreferencesModal({ preferences, onSave }: PreferencesModalProps) {
+  const [weightSleep, setWeightSleep] = useState(preferences.weight_sleep);
+  const [weightStudy, setWeightStudy] = useState(preferences.weight_study);
+  const [weightSocial, setWeightSocial] = useState(preferences.weight_social);
+  const [weightGym, setWeightGym] = useState(preferences.weight_gym);
+  const [cannabisBuffer, setCannabisBuffer] = useState(preferences.cannabis_buffer_hours);
+  const [commuteMinutes, setCommuteMinutes] = useState(preferences.commute_duration_minutes);
+  const [targetSleep, setTargetSleep] = useState(preferences.target_sleep_hours);
+  const [saved, setSaved] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: UserPreferences = {
+      ...preferences,
+      weight_sleep: Number(weightSleep),
+      weight_study: Number(weightStudy),
+      weight_social: Number(weightSocial),
+      weight_gym: Number(weightGym),
+      cannabis_buffer_hours: Number(cannabisBuffer),
+      commute_duration_minutes: Number(commuteMinutes),
+      target_sleep_hours: Number(targetSleep),
+      updated_at: new Date().toISOString(),
+    };
+
+    await onSave(updated);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div className="rounded-2xl glass-panel p-5 border border-slate-800">
+        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          <Sliders className="h-5 w-5 text-cyan-400" />
+          <span>Ponderaciones de Prioridad & Preferencias Globales</span>
+        </h2>
+        <p className="text-xs text-slate-400 mt-1">
+          Ajusta los sliders (0 a 10) para definir cómo debe resolver la IA los conflictos de agenda entre descanso, estudio, amistades y entrenamiento.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Sliders 0-10 */}
+        <div className="rounded-2xl glass-panel p-6 border border-slate-800 space-y-5">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Prioridades Relativas (0 = Mínima, 10 = Vital)
+          </h3>
+
+          {/* Sueño */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-white flex items-center gap-2">
+                <Moon className="h-4 w-4 text-indigo-400" />
+                <span>Sueño & Descanso Flotante</span>
+              </span>
+              <span className="font-mono text-base font-black text-cyan-400">{weightSleep}/10</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              value={weightSleep}
+              onChange={(e) => setWeightSleep(Number(e.target.value))}
+              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+            />
+            <p className="text-[11px] text-slate-400">
+              Garantiza 8h continuas tras salidas nocturnas de trabajo (ej. Ferro a la 01:00 AM).
+            </p>
+          </div>
+
+          {/* Estudio */}
+          <div className="space-y-2 pt-2 border-t border-slate-800/80">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-white flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-blue-400" />
+                <span>Estudio Universitario (Foco Continuo)</span>
+              </span>
+              <span className="font-mono text-base font-black text-blue-400">{weightStudy}/10</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              value={weightStudy}
+              onChange={(e) => setWeightStudy(Number(e.target.value))}
+              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-400"
+            />
+            <p className="text-[11px] text-slate-400">
+              Protege bloques indivisibles de 1.5h a 2.5h para Redes, Análisis y Calidad.
+            </p>
+          </div>
+
+          {/* Vida Social */}
+          <div className="space-y-2 pt-2 border-t border-slate-800/80">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-white flex items-center gap-2">
+                <Users className="h-4 w-4 text-cyan-400" />
+                <span>Vida Social & Vínculos</span>
+              </span>
+              <span className="font-mono text-base font-black text-cyan-400">{weightSocial}/10</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              value={weightSocial}
+              onChange={(e) => setWeightSocial(Number(e.target.value))}
+              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+            />
+            <p className="text-[11px] text-slate-400">
+              Prioriza alcanzar las metas de horas semanales con amigos y salidas.
+            </p>
+          </div>
+
+          {/* Gym */}
+          <div className="space-y-2 pt-2 border-t border-slate-800/80">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-white flex items-center gap-2">
+                <Dumbbell className="h-4 w-4 text-fuchsia-400" />
+                <span>Entrenamiento / Gimnasio</span>
+              </span>
+              <span className="font-mono text-base font-black text-fuchsia-400">{weightGym}/10</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              value={weightGym}
+              onChange={(e) => setWeightGym(Number(e.target.value))}
+              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-fuchsia-400"
+            />
+            <p className="text-[11px] text-slate-400">
+              Programa sesiones respetando intervalos de recuperación muscular.
+            </p>
+          </div>
+        </div>
+
+        {/* Parámetros Operativos */}
+        <div className="rounded-2xl glass-panel p-6 border border-slate-800 space-y-4">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Reglas Operativas y Biológicas
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5 rounded-xl bg-slate-900/60 p-3.5 border border-slate-800">
+              <label className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                <Shield className="h-4 w-4" /> Búfer Cannabis (horas)
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                min="1"
+                max="8"
+                value={cannabisBuffer}
+                onChange={(e) => setCannabisBuffer(Number(e.target.value))}
+                className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white font-mono"
+                required
+              />
+              <p className="text-[10px] text-slate-400">
+                Mínimo 4.0h obligatorias fuera de casa antes de volver con los padres.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-xl bg-slate-900/60 p-3.5 border border-slate-800">
+              <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <Car className="h-4 w-4" /> Traslado / Commute (min)
+              </label>
+              <input
+                type="number"
+                step="5"
+                min="10"
+                max="90"
+                value={commuteMinutes}
+                onChange={(e) => setCommuteMinutes(Number(e.target.value))}
+                className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white font-mono"
+                required
+              />
+              <p className="text-[10px] text-slate-400">
+                Tiempo de desconexión (música/podcasts, sin forzar estudio).
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-xl bg-slate-900/60 p-3.5 border border-slate-800">
+              <label className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                <Moon className="h-4 w-4" /> Meta Sueño Diario (h)
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                min="6"
+                max="10"
+                value={targetSleep}
+                onChange={(e) => setTargetSleep(Number(e.target.value))}
+                className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white font-mono"
+                required
+              />
+              <p className="text-[10px] text-slate-400">
+                Meta biológica de descanso diario continuo.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Submit */}
+        <div className="flex items-center justify-end gap-3">
+          {saved && (
+            <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 animate-fade-in">
+              <Check className="h-4 w-4" /> ¡Preferencias guardadas exitosamente!
+            </span>
+          )}
+          <button
+            type="submit"
+            className="flex items-center gap-2 rounded-2xl bg-cyan-600 hover:bg-cyan-500 px-6 py-2.5 text-xs font-bold text-white shadow-xl shadow-cyan-900/40 transition-all active:scale-95"
+          >
+            <Save className="h-4 w-4" />
+            <span>Guardar Configuración</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
