@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, GenerativeModel, ModelParams, RequestOptions } from '@google/generative-ai';
+import { GoogleGenerativeAI, ModelParams, RequestOptions } from '@google/generative-ai';
 
 export interface DiscoveredGeminiModel {
   name: string;
@@ -26,10 +26,8 @@ export interface InspectionResult {
 // Modelos textuales de alta velocidad en orden de fiabilidad y disponibilidad
 export const PREFERRED_MODELS = [
   'gemini-2.0-flash',
-  'gemini-2.5-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-flash-002',
+  'gemini-2.5-flash',
   'gemini-3.8-flash',
   'gemini-2.0-flash-lite',
   'gemini-1.5-flash-8b',
@@ -38,14 +36,11 @@ export const PREFERRED_MODELS = [
 ];
 
 // Regex para descartar modelos que no soportan salida de texto (ej. TTS, Audio puro, Embeddings)
-const NON_TEXT_MODEL_REGEX = /(-tts|tts|-audio|embedding|imagen|whisper|robotics)/i;
-
-const resolutionCache = new Map<string, { result: ModelResolutionResult; timestamp: number }>();
-const CACHE_TTL_MS = 15 * 60 * 1000;
+export const NON_TEXT_MODEL_REGEX = /(-tts|tts|-audio|embedding|imagen|whisper|robotics)/i;
 
 /**
- * Consulta la API ListModels de Google para detectar qué modelos están disponibles
- * para la clave del usuario, descartando expresamente modelos no textuales como TTS.
+ * Consulta la API ListModels de Google para diagnosticar qué modelos están habilitados
+ * para la clave del usuario (usado principalmente en el botón de Probar Conexión).
  */
 export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult> {
   const cleanKey = apiKey.replace(/^['"]|['"]$/g, '').trim();
@@ -65,7 +60,7 @@ export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult
       const res = await fetch(url, {
         method: 'GET',
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(4000),
       });
 
       lastStatus = res.status;
@@ -82,7 +77,6 @@ export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult
           const rawName = String(m.name || '').replace(/^models\//, '');
           const methods: string[] = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
 
-          // Descartar modelos que no son de texto o que son de solo voz/audio
           if (NON_TEXT_MODEL_REGEX.test(rawName)) {
             continue;
           }
@@ -99,7 +93,7 @@ export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult
         }
       }
     } catch (err: any) {
-      console.warn(`[Gemini inspectKey ${apiVer}] Network error:`, err?.message || err);
+      console.warn(`[Gemini inspectKey ${apiVer}] Error de red:`, err?.message || err);
     }
   }
 
@@ -137,88 +131,11 @@ export async function listAvailableModels(apiKey: string): Promise<DiscoveredGem
   return inspection.models;
 }
 
-export async function resolveBestModel(apiKey: string, preferredModel?: string): Promise<ModelResolutionResult> {
-  const cleanKey = apiKey.replace(/^['"]|['"]$/g, '').trim();
-  const cached = resolutionCache.get(cleanKey);
-  if (!preferredModel && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.result;
-  }
-
-  const inspection = await inspectGeminiKey(cleanKey);
-  const discovered = inspection.models;
-  const discoveredNames = discovered.map((m) => m.name);
-
-  if (discovered.length > 0) {
-    // Si el usuario especificó un modelo puntual y fue descubierto y no es TTS
-    if (preferredModel && preferredModel !== 'auto' && !NON_TEXT_MODEL_REGEX.test(preferredModel)) {
-      const match = discovered.find((m) => m.name.toLowerCase() === preferredModel.toLowerCase());
-      if (match) {
-        const result: ModelResolutionResult = {
-          modelName: match.name,
-          apiVersion: match.apiVersion,
-          availableModels: discoveredNames,
-          discoveryMethod: 'list_models',
-        };
-        resolutionCache.set(cleanKey, { result, timestamp: Date.now() });
-        return result;
-      }
-    }
-
-    // Buscar en la lista de preferencia estándar
-    for (const pref of PREFERRED_MODELS) {
-      const match = discovered.find((m) => m.name === pref);
-      if (match) {
-        const result: ModelResolutionResult = {
-          modelName: match.name,
-          apiVersion: match.apiVersion,
-          availableModels: discoveredNames,
-          discoveryMethod: 'list_models',
-        };
-        resolutionCache.set(cleanKey, { result, timestamp: Date.now() });
-        return result;
-      }
-    }
-
-    // Cualquier modelo Flash textual
-    const flashMatch = discovered.find(
-      (m) => m.name.toLowerCase().includes('flash') && !NON_TEXT_MODEL_REGEX.test(m.name)
-    );
-    if (flashMatch) {
-      const result: ModelResolutionResult = {
-        modelName: flashMatch.name,
-        apiVersion: flashMatch.apiVersion,
-        availableModels: discoveredNames,
-        discoveryMethod: 'list_models',
-      };
-      resolutionCache.set(cleanKey, { result, timestamp: Date.now() });
-      return result;
-    }
-
-    // Primer modelo textual descubierto
-    const result: ModelResolutionResult = {
-      modelName: discovered[0].name,
-      apiVersion: discovered[0].apiVersion,
-      availableModels: discoveredNames,
-      discoveryMethod: 'list_models',
-    };
-    resolutionCache.set(cleanKey, { result, timestamp: Date.now() });
-    return result;
-  }
-
-  // Fallback si ListModels no devolvió nada
-  const fallbackModel = (preferredModel && preferredModel !== 'auto' && !NON_TEXT_MODEL_REGEX.test(preferredModel))
-    ? preferredModel
-    : 'gemini-2.0-flash';
-
-  return {
-    modelName: fallbackModel,
-    apiVersion: 'v1beta',
-    availableModels: PREFERRED_MODELS.slice(0, 5),
-    discoveryMethod: 'fallback_probe',
-    inspectionError: inspection.errorMessage,
-  };
-}
-
+/**
+ * Ejecuta la llamada a Gemini con failover ultra veloz y sin retrasos de red previos.
+ * Si el modelo preferido (ej. gemini-3.8-flash) sufre 503 (alta demanda) o timeout,
+ * inmediatamente salta a gemini-2.0-flash o gemini-1.5-flash sin bloquear al usuario.
+ */
 export async function executeGeminiWithFallback(
   apiKey: string,
   generateParams: {
@@ -237,22 +154,15 @@ export async function executeGeminiWithFallback(
 }> {
   const cleanKey = apiKey.replace(/^['"]|['"]$/g, '').trim();
   const userRequested = generateParams.preferredModel?.trim();
-  const resolved = await resolveBestModel(cleanKey, userRequested);
 
-  if (resolved.discoveryMethod === 'fallback_probe' && resolved.inspectionError) {
-    throw new Error(`Google AI rechazó la clave: ${resolved.inspectionError}. Asegúrate de crear tu clave en https://aistudio.google.com/app/apikey.`);
+  // Candidatos ordenados de forma eficiente
+  const candidateList: string[] = [];
+  if (userRequested && userRequested !== 'auto' && !NON_TEXT_MODEL_REGEX.test(userRequested)) {
+    candidateList.push(userRequested);
   }
+  candidateList.push('gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash');
 
-  // Armar lista de candidatos priorizada evitando modelos de audio/TTS
-  const rawCandidates = [
-    ...(userRequested && userRequested !== 'auto' && !NON_TEXT_MODEL_REGEX.test(userRequested) ? [userRequested] : []),
-    resolved.modelName,
-    ...PREFERRED_MODELS,
-    ...(resolved.availableModels || []),
-  ];
-
-  const candidates = Array.from(new Set(rawCandidates.filter((m) => Boolean(m) && !NON_TEXT_MODEL_REGEX.test(m))));
-
+  const candidates = Array.from(new Set(candidateList));
   const genAI = new GoogleGenerativeAI(cleanKey);
   let lastError: any = null;
 
@@ -269,64 +179,36 @@ export async function executeGeminiWithFallback(
         ...(generateParams.systemInstruction ? { systemInstruction: generateParams.systemInstruction } : {}),
       };
 
-      const requestOptions: RequestOptions = resolved.apiVersion ? { apiVersion: resolved.apiVersion } : {};
-      const model = genAI.getGenerativeModel(modelOptions, requestOptions);
+      // Timeout de 9 segundos por intento para responder rápido
+      const requestOptions: RequestOptions = {
+        timeout: 9000,
+      };
 
+      const model = genAI.getGenerativeModel(modelOptions, requestOptions);
       const result = await model.generateContent(generateParams.contents);
       const text = result.response.text();
       const latencyMs = Date.now() - start;
-
-      if (modelCandidate !== resolved.modelName) {
-        resolutionCache.set(cleanKey, {
-          result: {
-            ...resolved,
-            modelName: modelCandidate,
-          },
-          timestamp: Date.now(),
-        });
-      }
 
       return {
         text,
         modelUsed: modelCandidate,
         latencyMs,
-        availableModels: resolved.availableModels,
+        availableModels: candidates,
       };
     } catch (err: any) {
       lastError = err;
       const errMsg = err?.message || String(err);
 
+      // Si la API key es totalmente inválida, abortar
       if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
         throw err;
       }
 
-      // Detectar incompatibilidad de modalidades (como TTS que rechaza TEXT),
-      // alta demanda temporal (503), modelo no encontrado (404), o cuota puntual (429)
-      const shouldFailover =
-        errMsg.includes('modalities') ||
-        errMsg.includes('AUDIO') ||
-        errMsg.includes('not supported') ||
-        errMsg.includes('404') ||
-        errMsg.includes('not found') ||
-        errMsg.includes('503') ||
-        errMsg.includes('Service Unavailable') ||
-        errMsg.includes('high demand') ||
-        errMsg.includes('overloaded') ||
-        errMsg.includes('500') ||
-        errMsg.includes('502') ||
-        errMsg.includes('504') ||
-        errMsg.includes('429') ||
-        errMsg.includes('RESOURCE_EXHAUSTED');
-
-      if (shouldFailover) {
-        console.warn(`[Gemini Failover] Modelo '${modelCandidate}' no apto o saturado (${errMsg.slice(0, 60)}...), probando siguiente...`);
-        continue;
-      }
-
-      throw err;
+      // Si el modelo da 503 (alta demanda), 404, 400 (audio modal) o timeout, probar de inmediato el siguiente
+      console.warn(`[Gemini Failover] Modelo '${modelCandidate}' no disponible (${errMsg.slice(0, 70)}...), probando siguiente candidato...`);
     }
   }
 
-  const guidance = 'Ningún modelo de texto de Gemini pudo responder. Si fue error 503 ("high demand"), intenta con gemini-2.0-flash en Preferencias. Si fue 404, genera una clave en https://aistudio.google.com/app/apikey.';
+  const guidance = 'Ningún modelo de Gemini respondió a tiempo. Te recomendamos verificar en Preferencias que esté seleccionado gemini-2.0-flash.';
   throw new Error(`${lastError?.message || 'Modelos no disponibles'} - ${guidance}`);
 }

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { executeGeminiWithFallback } from '@/lib/gemini';
 import { Contact, ContactBusySlot, Event, UserPreferences, WorkShift } from '@/types/database';
 import { OptimizerResponse, StageLog, ExecutionLogs } from '@/types/optimizer';
 import { fetchMDPWeatherForecast, generateMDPWeatherSummaryForAI } from '@/lib/weather';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `Eres "MiMesa Kernel", el optimizador algorítmico y asistente de planificación personal de Matu en Mar del Plata, Argentina.
 Tu misión es optimizar la rutina semanal del usuario maximizando descanso, estudio y vida social bajo restricciones biológicas, climáticas y operativas estrictas.

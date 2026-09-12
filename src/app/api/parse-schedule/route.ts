@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { executeGeminiWithFallback } from '@/lib/gemini';
 import { ParsedScheduleItem, ParseScheduleResponse } from '@/types/parser';
 import { EventCategory, LocationType } from '@/types/database';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const PARSER_SYSTEM_PROMPT = `Eres el asistente inteligente de reconocimiento y extracción de horarios de "MiMesa Scheduler" en Mar del Plata, Argentina.
 Tu misión es recibir una imagen (foto de planilla de turnos, captura de WhatsApp, foto de pizarra o notas) y/o un texto explicativo del usuario, interpretar los horarios y devolverlos en formato JSON estructurado.
