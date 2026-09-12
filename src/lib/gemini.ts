@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, GenerativeModel, ModelParams, RequestOptions } from '@google/generative-ai';
 
 export interface DiscoveredGeminiModel {
-  name: string; // e.g. "gemini-2.0-flash"
+  name: string;
   displayName?: string;
   supportedMethods: string[];
   apiVersion: 'v1' | 'v1beta';
@@ -23,29 +23,29 @@ export interface InspectionResult {
   hint?: string;
 }
 
+// Modelos textuales de alta velocidad en orden de fiabilidad y disponibilidad
 export const PREFERRED_MODELS = [
-  'gemini-3.8-flash',
-  'gemini-2.5-flash',
   'gemini-2.0-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
   'gemini-1.5-flash-latest',
   'gemini-1.5-flash-002',
-  'gemini-1.5-flash-001',
-  'gemini-1.5-flash',
+  'gemini-3.8-flash',
   'gemini-2.0-flash-lite',
   'gemini-1.5-flash-8b',
-  'gemini-2.0-flash-exp',
   'gemini-1.5-pro',
-  'gemini-1.5-pro-latest',
   'gemini-pro',
 ];
 
-// Cache model discovery per API key to minimize network requests (15 min TTL)
+// Regex para descartar modelos que no soportan salida de texto (ej. TTS, Audio puro, Embeddings)
+const NON_TEXT_MODEL_REGEX = /(-tts|tts|-audio|embedding|imagen|whisper|robotics)/i;
+
 const resolutionCache = new Map<string, { result: ModelResolutionResult; timestamp: number }>();
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
 /**
- * Inspects an API key directly against Google's ListModels endpoint to get
- * the exact status and authorized models or actionable error message from Google.
+ * Consulta la API ListModels de Google para detectar qué modelos están disponibles
+ * para la clave del usuario, descartando expresamente modelos no textuales como TTS.
  */
 export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult> {
   const cleanKey = apiKey.replace(/^['"]|['"]$/g, '').trim();
@@ -64,7 +64,7 @@ export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult
       const url = `https://generativelanguage.googleapis.com/${apiVer}/models?key=${cleanKey}`;
       const res = await fetch(url, {
         method: 'GET',
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: 'application/json' },
         signal: AbortSignal.timeout(6000),
       });
 
@@ -81,6 +81,12 @@ export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult
         for (const m of data.models) {
           const rawName = String(m.name || '').replace(/^models\//, '');
           const methods: string[] = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
+
+          // Descartar modelos que no son de texto o que son de solo voz/audio
+          if (NON_TEXT_MODEL_REGEX.test(rawName)) {
+            continue;
+          }
+
           if (rawName && methods.includes('generateContent') && !seen.has(rawName)) {
             seen.add(rawName);
             allDiscovered.push({
@@ -104,40 +110,33 @@ export async function inspectGeminiKey(apiKey: string): Promise<InspectionResult
     };
   }
 
-  // If no models were discovered, explain why from Google's response
   const rawMsg = lastErrorJson?.error?.message || '';
-  let hint = 'No se encontraron modelos disponibles para esta clave.';
+  let hint = 'No se encontraron modelos de texto disponibles para esta clave.';
 
   if (rawMsg.includes('API_KEY_INVALID') || rawMsg.includes('API key not valid')) {
     hint = 'La clave ingresada no es válida. Revisa o genera una nueva en Google AI Studio (aistudio.google.com).';
   } else if (rawMsg.includes('Generative Language API has not been used') || rawMsg.includes('disabled')) {
-    hint = 'La API "Generative Language" no está habilitada en el proyecto de Google Cloud de esta clave. Recomendación: Crea una clave gratuita directa en https://aistudio.google.com/app/apikey.';
+    hint = 'La API "Generative Language" no está habilitada en el proyecto de Google Cloud de esta clave. Crea una clave directa en aistudio.google.com/app/apikey.';
   } else if (rawMsg.includes('The caller does not have permission') || lastStatus === 403) {
-    hint = 'Permiso denegado por Google. Asegúrate de generar la clave en Google AI Studio (aistudio.google.com), no desde un proyecto empresarial restringido.';
+    hint = 'Permiso denegado por Google. Genera tu clave en Google AI Studio (aistudio.google.com).';
   } else if (lastStatus === 404) {
-    hint = 'El servicio de modelos de Google respondió 404. Tu proyecto de Google no tiene acceso a la Generative Language API. Genera una clave gratuita en aistudio.google.com.';
+    hint = 'El servicio de Google respondió 404. Genera una clave gratuita en https://aistudio.google.com/app/apikey.';
   }
 
   return {
     ok: false,
     models: [],
     statusCode: lastStatus,
-    errorMessage: rawMsg || (lastStatus ? `HTTP Error ${lastStatus} al consultar modelos de Google` : 'Error de red contactando a Google'),
+    errorMessage: rawMsg || (lastStatus ? `HTTP Error ${lastStatus} al consultar modelos` : 'Error de red contactando a Google'),
     hint,
   };
 }
 
-/**
- * Lists available models for generateContent.
- */
 export async function listAvailableModels(apiKey: string): Promise<DiscoveredGeminiModel[]> {
   const inspection = await inspectGeminiKey(apiKey);
   return inspection.models;
 }
 
-/**
- * Resolves the best supported model for the given API key.
- */
 export async function resolveBestModel(apiKey: string, preferredModel?: string): Promise<ModelResolutionResult> {
   const cleanKey = apiKey.replace(/^['"]|['"]$/g, '').trim();
   const cached = resolutionCache.get(cleanKey);
@@ -147,12 +146,12 @@ export async function resolveBestModel(apiKey: string, preferredModel?: string):
 
   const inspection = await inspectGeminiKey(cleanKey);
   const discovered = inspection.models;
-  const discoveredNames = discovered.map(m => m.name);
+  const discoveredNames = discovered.map((m) => m.name);
 
   if (discovered.length > 0) {
-    // 0. If preferredModel requested and discovered, use it
-    if (preferredModel && preferredModel !== 'auto') {
-      const match = discovered.find(m => m.name.toLowerCase() === preferredModel.toLowerCase());
+    // Si el usuario especificó un modelo puntual y fue descubierto y no es TTS
+    if (preferredModel && preferredModel !== 'auto' && !NON_TEXT_MODEL_REGEX.test(preferredModel)) {
+      const match = discovered.find((m) => m.name.toLowerCase() === preferredModel.toLowerCase());
       if (match) {
         const result: ModelResolutionResult = {
           modelName: match.name,
@@ -165,9 +164,9 @@ export async function resolveBestModel(apiKey: string, preferredModel?: string):
       }
     }
 
-    // 1. Check preferred models in order
+    // Buscar en la lista de preferencia estándar
     for (const pref of PREFERRED_MODELS) {
-      const match = discovered.find(m => m.name === pref);
+      const match = discovered.find((m) => m.name === pref);
       if (match) {
         const result: ModelResolutionResult = {
           modelName: match.name,
@@ -180,8 +179,10 @@ export async function resolveBestModel(apiKey: string, preferredModel?: string):
       }
     }
 
-    // 2. Any model with "flash" in the name
-    const flashMatch = discovered.find(m => m.name.toLowerCase().includes('flash'));
+    // Cualquier modelo Flash textual
+    const flashMatch = discovered.find(
+      (m) => m.name.toLowerCase().includes('flash') && !NON_TEXT_MODEL_REGEX.test(m.name)
+    );
     if (flashMatch) {
       const result: ModelResolutionResult = {
         modelName: flashMatch.name,
@@ -193,20 +194,7 @@ export async function resolveBestModel(apiKey: string, preferredModel?: string):
       return result;
     }
 
-    // 3. Any model with "gemini" in the name
-    const geminiMatch = discovered.find(m => m.name.toLowerCase().includes('gemini'));
-    if (geminiMatch) {
-      const result: ModelResolutionResult = {
-        modelName: geminiMatch.name,
-        apiVersion: geminiMatch.apiVersion,
-        availableModels: discoveredNames,
-        discoveryMethod: 'list_models',
-      };
-      resolutionCache.set(cleanKey, { result, timestamp: Date.now() });
-      return result;
-    }
-
-    // 4. Fall back to first discovered model
+    // Primer modelo textual descubierto
     const result: ModelResolutionResult = {
       modelName: discovered[0].name,
       apiVersion: discovered[0].apiVersion,
@@ -217,21 +205,20 @@ export async function resolveBestModel(apiKey: string, preferredModel?: string):
     return result;
   }
 
-  // If inspection failed with a specific Google error, preserve it
-  const defaultResult: ModelResolutionResult = {
-    modelName: (preferredModel && preferredModel !== 'auto') ? preferredModel : 'gemini-3.8-flash',
+  // Fallback si ListModels no devolvió nada
+  const fallbackModel = (preferredModel && preferredModel !== 'auto' && !NON_TEXT_MODEL_REGEX.test(preferredModel))
+    ? preferredModel
+    : 'gemini-2.0-flash';
+
+  return {
+    modelName: fallbackModel,
     apiVersion: 'v1beta',
-    availableModels: PREFERRED_MODELS.slice(0, 6),
+    availableModels: PREFERRED_MODELS.slice(0, 5),
     discoveryMethod: 'fallback_probe',
     inspectionError: inspection.errorMessage,
   };
-  return defaultResult;
 }
 
-/**
- * Executes a generateContent call with automatic fallback across candidate models
- * if the primary model returns 404 (model not found / deprecated).
- */
 export async function executeGeminiWithFallback(
   apiKey: string,
   generateParams: {
@@ -252,21 +239,19 @@ export async function executeGeminiWithFallback(
   const userRequested = generateParams.preferredModel?.trim();
   const resolved = await resolveBestModel(cleanKey, userRequested);
 
-  // If inspection specifically reported that the API key has an error or is disabled, throw early
   if (resolved.discoveryMethod === 'fallback_probe' && resolved.inspectionError) {
-    throw new Error(`Google AI rechazó la clave: ${resolved.inspectionError}. Asegúrate de crear una clave en https://aistudio.google.com/app/apikey.`);
+    throw new Error(`Google AI rechazó la clave: ${resolved.inspectionError}. Asegúrate de crear tu clave en https://aistudio.google.com/app/apikey.`);
   }
 
-  // Build candidate list: prioritize userRequested, then resolved model, then candidates
-  const candidateList = [
-    ...(userRequested && userRequested !== 'auto' ? [userRequested] : []),
+  // Armar lista de candidatos priorizada evitando modelos de audio/TTS
+  const rawCandidates = [
+    ...(userRequested && userRequested !== 'auto' && !NON_TEXT_MODEL_REGEX.test(userRequested) ? [userRequested] : []),
     resolved.modelName,
     ...PREFERRED_MODELS,
     ...(resolved.availableModels || []),
   ];
 
-  // Deduplicate candidate list
-  const candidates = Array.from(new Set(candidateList.filter(Boolean)));
+  const candidates = Array.from(new Set(rawCandidates.filter((m) => Boolean(m) && !NON_TEXT_MODEL_REGEX.test(m))));
 
   const genAI = new GoogleGenerativeAI(cleanKey);
   let lastError: any = null;
@@ -291,7 +276,6 @@ export async function executeGeminiWithFallback(
       const text = result.response.text();
       const latencyMs = Date.now() - start;
 
-      // Update cache with the working model
       if (modelCandidate !== resolved.modelName) {
         resolutionCache.set(cleanKey, {
           result: {
@@ -312,20 +296,18 @@ export async function executeGeminiWithFallback(
       lastError = err;
       const errMsg = err?.message || String(err);
 
-      // Si la clave no es válida en lo absoluto, no tiene sentido probar más modelos
-      const isInvalidKey = errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid');
-      if (isInvalidKey) {
+      if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
         throw err;
       }
 
-      // Failover automático ante:
-      // 1) 404 Modelo no encontrado o deprecado
-      // 2) 503 / 500 / 502 / 504 Alta demanda temporal ("high demand", "Service Unavailable", "overloaded")
-      // 3) 429 Cuota puntual excedida ("RESOURCE_EXHAUSTED", "Too Many Requests")
+      // Detectar incompatibilidad de modalidades (como TTS que rechaza TEXT),
+      // alta demanda temporal (503), modelo no encontrado (404), o cuota puntual (429)
       const shouldFailover =
+        errMsg.includes('modalities') ||
+        errMsg.includes('AUDIO') ||
+        errMsg.includes('not supported') ||
         errMsg.includes('404') ||
         errMsg.includes('not found') ||
-        errMsg.includes('is not supported for generateContent') ||
         errMsg.includes('503') ||
         errMsg.includes('Service Unavailable') ||
         errMsg.includes('high demand') ||
@@ -337,7 +319,7 @@ export async function executeGeminiWithFallback(
         errMsg.includes('RESOURCE_EXHAUSTED');
 
       if (shouldFailover) {
-        console.warn(`[Gemini Failover] Modelo '${modelCandidate}' con error (${errMsg.slice(0, 75)}...), probando siguiente candidato...`);
+        console.warn(`[Gemini Failover] Modelo '${modelCandidate}' no apto o saturado (${errMsg.slice(0, 60)}...), probando siguiente...`);
         continue;
       }
 
@@ -345,7 +327,6 @@ export async function executeGeminiWithFallback(
     }
   }
 
-  // Si todos los candidatos fallaron
-  const guidance = 'Ningún modelo de Gemini respondió exitosamente. Si fue error 503 ("high demand"), los servidores de Google AI están experimentando un pico de tráfico; puedes cambiar a gemini-2.5-flash o gemini-2.0-flash en Preferencias. Si fue 404, genera una clave en https://aistudio.google.com/app/apikey.';
+  const guidance = 'Ningún modelo de texto de Gemini pudo responder. Si fue error 503 ("high demand"), intenta con gemini-2.0-flash en Preferencias. Si fue 404, genera una clave en https://aistudio.google.com/app/apikey.';
   throw new Error(`${lastError?.message || 'Modelos no disponibles'} - ${guidance}`);
 }
