@@ -378,7 +378,7 @@ export function PreferencesModal({ preferences, onSave, onApiKeySaved }: Prefere
                 <p className="font-semibold">{testResult.message}</p>
                 {testResult.success && (
                   <p className="text-[11px] text-emerald-300/80 mt-0.5">
-                    Clave verificada y guardada localmente. Ahora las optimizaciones usarán Gemini 1.5 Flash.
+                    Clave verificada y guardada localmente. Ahora las optimizaciones usarán Google Gemini.
                   </p>
                 )}
               </div>

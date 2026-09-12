@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { executeGeminiWithFallback } from '@/lib/gemini';
 import { ParsedScheduleItem, ParseScheduleResponse } from '@/types/parser';
 import { EventCategory, LocationType } from '@/types/database';
 
@@ -75,19 +75,9 @@ export async function POST(req: Request) {
     const cleanKey = rawKey.replace(/^['"]|['"]$/g, '').trim();
     const apiKey = cleanKey.length > 10 && cleanKey !== 'your-gemini-api-key' ? cleanKey : '';
 
-    // Si hay API key configurada, usar Gemini 1.5 Flash multimodal
+    // Si hay API key configurada, usar Gemini multimodal (con resolución y fallback)
     if (apiKey) {
       try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.1,
-          },
-          systemInstruction: PARSER_SYSTEM_PROMPT,
-        });
-
         const contents: any[] = [];
 
         // Si se adjuntó imagen en base64
@@ -110,8 +100,14 @@ Instrucción o texto del usuario: "${prompt || 'Extrae todos los horarios visibl
 
         contents.push({ text: userPrompt });
 
-        const result = await model.generateContent(contents);
-        const text = result.response.text();
+        const geminiRes = await executeGeminiWithFallback(apiKey, {
+          contents,
+          systemInstruction: PARSER_SYSTEM_PROMPT,
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+        });
+
+        const text = geminiRes.text;
         let cleanJson = text.trim();
         if (cleanJson.startsWith('```')) {
           cleanJson = cleanJson.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();

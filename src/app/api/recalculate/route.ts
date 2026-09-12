@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { executeGeminiWithFallback } from '@/lib/gemini';
 import { Contact, ContactBusySlot, Event, UserPreferences, WorkShift } from '@/types/database';
 import { OptimizerResponse, StageLog, ExecutionLogs } from '@/types/optimizer';
 import { fetchMDPWeatherForecast, generateMDPWeatherSummaryForAI } from '@/lib/weather';
@@ -121,27 +121,22 @@ export async function POST(req: Request) {
     const promptText = `Analiza los siguientes eventos actuales y restricciones del usuario y devuelve la propuesta de optimización semanal en formato JSON estricto:
 ${JSON.stringify(userPayload, null, 2)}`;
 
-    // Si hay API Key válida, ejecutar con Gemini 1.5 Flash
+    // Si hay API Key válida, ejecutar con Gemini (con resolución automática y fallback)
     if (apiKey) {
       try {
-        const stageStart = Date.now();
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.15,
-          },
+        const geminiRes = await executeGeminiWithFallback(apiKey, {
+          contents: promptText,
           systemInstruction: SYSTEM_PROMPT,
+          temperature: 0.15,
+          responseMimeType: 'application/json',
         });
 
-        const result = await model.generateContent(promptText);
-        const responseText = result.response.text();
-        const stageLatency = Date.now() - stageStart;
+        const responseText = geminiRes.text;
+        const stageLatency = geminiRes.latencyMs;
 
         stages.push({
           stage_number: 1,
-          name: 'Optimización Neuronal Gemini 1.5 Flash',
+          name: `Optimización Neuronal Google Gemini (${geminiRes.modelUsed})`,
           description: 'Evaluación multicriterio de restricciones biológicas, meteorológicas y de contactos en MDP',
           prompt_sent: promptText,
           raw_response: responseText,
@@ -179,7 +174,7 @@ ${JSON.stringify(userPayload, null, 2)}`;
 
         const executionLogs: ExecutionLogs = {
           provider: 'gemini-1.5-flash',
-          model_name: 'gemini-1.5-flash',
+          model_name: geminiRes.modelUsed,
           api_key_source: apiKeySource,
           total_latency_ms: Date.now() - startTimeMs,
           timestamp: new Date().toISOString(),

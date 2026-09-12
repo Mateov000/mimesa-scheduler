@@ -173,12 +173,12 @@ export function Header({
             }`}
             title={
               hasGeminiKey
-                ? 'Gemini 1.5 Flash conectado (haz clic para editar clave)'
+                ? 'Google Gemini conectado (haz clic para editar clave)'
                 : 'Modo heurístico / Sin API Key (haz clic para configurar)'
             }
           >
             <Sparkles className={`h-3 w-3 ${hasGeminiKey ? 'text-emerald-400' : 'text-amber-400'}`} />
-            <span>{hasGeminiKey ? 'Gemini 1.5' : 'IA Offline'}</span>
+            <span>{hasGeminiKey ? 'Gemini IA' : 'IA Offline'}</span>
           </button>
 
           {/* Smart Schedule Importer Button */}

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { executeGeminiWithFallback, listAvailableModels } from '@/lib/gemini';
 
 export const runtime = 'nodejs';
 
@@ -16,30 +16,39 @@ export async function POST(req: Request) {
       );
     }
 
-    const genAI = new GoogleGenerativeAI(cleanKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        maxOutputTokens: 10,
-        temperature: 0,
-      },
+    const result = await executeGeminiWithFallback(cleanKey, {
+      contents: 'ping',
+      temperature: 0,
+      maxOutputTokens: 10,
     });
-
-    const start = Date.now();
-    const result = await model.generateContent('ping');
-    const latency = Date.now() - start;
-    const text = result.response.text();
 
     return NextResponse.json({
       success: true,
-      model: 'gemini-1.5-flash',
-      latency_ms: latency,
-      message: 'Conexión exitosa con Google Gemini 1.5 Flash',
-      response_preview: text.trim(),
+      model: result.modelUsed,
+      latency_ms: result.latencyMs,
+      available_models: result.availableModels,
+      message: `Conexión exitosa con Google Gemini (${result.modelUsed})`,
+      response_preview: result.text.trim(),
     });
   } catch (error: any) {
     console.error('Error testing Gemini API key:', error);
     const msg = error?.message || String(error);
+
+    // Intento de diagnóstico: verificar si ListModels arroja algo
+    let availableHint = '';
+    try {
+      const rawKey = (await req.clone().json().catch(() => ({})))?.apiKey || req.headers.get('x-gemini-api-key') || '';
+      const cleanKey = String(rawKey).replace(/^['"]|['"]$/g, '').trim();
+      if (cleanKey) {
+        const models = await listAvailableModels(cleanKey);
+        if (models.length > 0) {
+          availableHint = ` Modelos disponibles para tu clave: ${models.map(m => m.name).join(', ')}.`;
+        }
+      }
+    } catch {
+      // Ignorar error secundario de diagnóstico
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -47,7 +56,9 @@ export async function POST(req: Request) {
         hint: msg.includes('API_KEY_INVALID')
           ? 'La clave ingresada no es válida. Revisa en Google AI Studio (aistudio.google.com).'
           : msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')
-          ? 'Límite de cuota de Google alcanzado.'
+          ? 'Límite de cuota de Google alcanzado en este momento.'
+          : (msg.includes('404') || msg.includes('not found'))
+          ? `El modelo no se encontró en tu cuenta de Google AI Studio.${availableHint || ' Verifica que tu clave tenga habilitado Generative Language API en aistudio.google.com.'}`
           : 'Error al contactar con la API de Google Gemini.',
       },
       { status: 400 }

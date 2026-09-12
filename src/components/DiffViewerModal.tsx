@@ -50,7 +50,7 @@ export function DiffViewerModal({
   onOpenLogs,
 }: DiffViewerModalProps) {
   const { summary, scorecards, safety_checks, changes = [], warnings = [], execution_logs } = proposal;
-  const isGemini = execution_logs?.provider === 'gemini-1.5-flash';
+  const isGemini = execution_logs?.provider === 'gemini-1.5-flash' || execution_logs?.provider === 'gemini';
 
   const formatTimeRange = (start?: string, end?: string) => {
     if (!start || !end) return '';
@@ -123,12 +123,12 @@ export function DiffViewerModal({
                       : 'bg-amber-950 text-amber-300 border-amber-700/60'
                   }`}
                 >
-                  {isGemini ? '🟢 Gemini 1.5 Flash' : '🟡 Modo Fallback'}
+                  {isGemini ? `🟢 ${execution_logs?.model_name || 'Google Gemini'}` : '🟡 Modo Fallback'}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
                 {isGemini
-                  ? `Optimizado con Gemini 1.5 Flash (${execution_logs?.total_latency_ms}ms)`
+                  ? `Optimizado con ${execution_logs?.model_name || 'Google Gemini'} (${execution_logs?.total_latency_ms}ms)`
                   : execution_logs?.error_details
                   ? `Error en llamada Gemini: ${execution_logs.error_details.slice(0, 45)}...`
                   : 'Motor heurístico de prueba (GEMINI_API_KEY no configurada)'}
