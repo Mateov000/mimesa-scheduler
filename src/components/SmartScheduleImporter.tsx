@@ -111,7 +111,6 @@ export function SmartScheduleImporter({
       const apiKey = DataStore.getGeminiApiKey();
       const res = await fetch('/api/parse-schedule', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         headers: {
           'Content-Type': 'application/json',
           ...(apiKey ? { 'x-gemini-api-key': apiKey } : {}),

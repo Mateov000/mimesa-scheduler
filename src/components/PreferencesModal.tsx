@@ -1,7 +1,5 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Sliders, Moon, BookOpen, Users, Dumbbell, Shield, Car, Save, Check } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { Sliders, Moon, BookOpen, Users, Dumbbell, Shield, Car, Save, Check, Key, ExternalLink, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { UserPreferences } from '@/types/database';
@@ -13,7 +11,6 @@ interface PreferencesModalProps {
   onApiKeySaved?: () => void;
 }
 
-export function PreferencesModal({ preferences, onSave }: PreferencesModalProps) {
 export function PreferencesModal({ preferences, onSave, onApiKeySaved }: PreferencesModalProps) {
   const [weightSleep, setWeightSleep] = useState(preferences.weight_sleep);
   const [weightStudy, setWeightStudy] = useState(preferences.weight_study);

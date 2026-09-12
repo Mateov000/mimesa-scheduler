@@ -66,7 +66,6 @@ export async function POST(req: Request) {
       reference_date?: string;
     } = body;
 
-    const apiKey = process.env.GEMINI_API_KEY;
     // Detectar API Key desde Header del cliente o Variable de Entorno
     const headerApiKey = req.headers.get('x-gemini-api-key')?.trim();
     const envApiKey = process.env.GEMINI_API_KEY?.trim();
@@ -75,7 +74,6 @@ export async function POST(req: Request) {
       : (envApiKey && envApiKey !== 'your-gemini-api-key' && envApiKey.length > 10 ? envApiKey : '');
 
     // Si hay API key configurada, usar Gemini 1.5 Flash multimodal
-    if (apiKey && apiKey !== 'your-gemini-api-key' && apiKey.trim().length > 10) {
     if (apiKey) {
       try {
         const genAI = new GoogleGenerativeAI(apiKey);

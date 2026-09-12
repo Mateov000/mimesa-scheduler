@@ -49,7 +49,6 @@ export function DiffViewerModal({
   isApplying,
   onOpenLogs,
 }: DiffViewerModalProps) {
-  const { summary, scorecards, safety_checks, changes = [], warnings = [] } = proposal;
   const { summary, scorecards, safety_checks, changes = [], warnings = [], execution_logs } = proposal;
   const isGemini = execution_logs?.provider === 'gemini-1.5-flash';
 
@@ -115,8 +114,6 @@ export function DiffViewerModal({
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Propuesta de Optimización de Rutina</h2>
-              <p className="text-xs text-slate-400">Motor Gemini 1.5 Flash + Open-Meteo Mar del Plata</p>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-white">Propuesta de Optimización</h2>
                 <span

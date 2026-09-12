@@ -262,7 +262,6 @@ export default function Home() {
       const apiKey = DataStore.getGeminiApiKey();
       const res = await fetch('/api/recalculate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         headers: {
           'Content-Type': 'application/json',
           ...(apiKey ? { 'x-gemini-api-key': apiKey } : {}),

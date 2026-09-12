@@ -63,4 +63,3 @@ export interface OptimizerResponse {
   warnings: string[];
   execution_logs?: ExecutionLogs;
 }
-
